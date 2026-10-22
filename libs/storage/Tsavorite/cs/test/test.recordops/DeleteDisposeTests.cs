@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
 using Tsavorite.core;
@@ -58,17 +59,30 @@ namespace Tsavorite.test
         {
             internal RMWAction expireAction = RMWAction.Default;
             internal bool requestLargerReinit;
+            internal bool expireOnlyInCU; // If true, only CopyUpdater returns the expire action (not IPU/NCU)
+            internal bool declineInitialUpdate; // If true, NeedInitialUpdate declines, so nothing replaces an expired record
+            internal int needCopyUpdateCalls;
 
             public override bool InPlaceUpdater(ref LogRecord logRecord, ref int input, ref int output, ref RMWInfo rmwInfo)
             {
-                if (expireAction != RMWAction.Default) { rmwInfo.Action = expireAction; return false; }
+                if (!expireOnlyInCU && expireAction != RMWAction.Default) { rmwInfo.Action = expireAction; return false; }
                 return base.InPlaceUpdater(ref logRecord, ref input, ref output, ref rmwInfo);
             }
 
+            public override bool NeedInitialUpdate<TKey>(TKey key, ref int input, ref int output, ref RMWInfo rmwInfo)
+                => !declineInitialUpdate;
+
             public override bool NeedCopyUpdate<TSourceLogRecord>(in TSourceLogRecord srcLogRecord, ref int input, ref int output, ref RMWInfo rmwInfo)
             {
-                if (expireAction != RMWAction.Default) { rmwInfo.Action = expireAction; return false; }
+                _ = Interlocked.Increment(ref needCopyUpdateCalls);
+                if (!expireOnlyInCU && expireAction != RMWAction.Default) { rmwInfo.Action = expireAction; return false; }
                 return true;
+            }
+
+            public override bool CopyUpdater<TSourceLogRecord>(in TSourceLogRecord srcLogRecord, ref LogRecord dstLogRecord, in RecordSizeInfo sizeInfo, ref int input, ref int output, ref RMWInfo rmwInfo)
+            {
+                if (expireAction != RMWAction.Default) { rmwInfo.Action = expireAction; return false; }
+                return base.CopyUpdater(in srcLogRecord, ref dstLogRecord, in sizeInfo, ref input, ref output, ref rmwInfo);
             }
 
             public override unsafe RecordFieldInfo GetRMWInitialFieldInfo<TKey>(TKey key, ref int input)
@@ -92,6 +106,9 @@ namespace Tsavorite.test
                 return base.InitialUpdater(ref dstLogRecord, in sizeInfo, ref input, ref output, ref rmwInfo);
             }
         }
+
+        /// <summary>Writes records with empty values, which are the size of a tombstone for the same key.</summary>
+        internal class EmptyValueFunctions : SessionFunctionsBase<int, int, Empty> { }
 
         internal class ExpiredReinitWithExpirationFunctions : SimpleIntSimpleFunctions
         {
@@ -294,6 +311,139 @@ namespace Tsavorite.test
             ClassicAssert.AreEqual(1, tracker.DeletedCount, "Immutable ExpireAndStop: expected exactly 1");
         }
 
+        /// <summary>
+        /// ExpireAndStop of a live record that cannot be elided appends a tombstone record. When that allocation has to wait for a flush the RMW
+        /// retries, and the retry must still find the record live: the delete succeeds and the key stays absent, in memory and on disk.
+        /// </summary>
+        [Test]
+        [Category("TsavoriteKV")]
+        public void ExpireAndStopOfALiveRecordSurvivesAWaitForFlush()
+        {
+            // Rebuild the store over a device whose writes the test completes, so the tombstone's allocation waits for a flush.
+            store.Dispose();
+            log.Dispose();
+            var gated = new GatedCompletionDevice(Devices.CreateLogDevice(Path.Join(MethodTestDir, "gated.log"), deleteOnClose: true));
+            log = gated;
+            store = new(new()
+            {
+                IndexSize = 1L << 13,
+                LogDevice = log,
+                LogMemorySize = 1L << 15,
+                PageSize = MinKvLogPageSize
+            }, StoreFunctions.Create(IntKeyComparer.Instance, new TrackingRecordTriggers(tracker))
+                , (allocatorSettings, storeFunctions) => new(allocatorSettings, storeFunctions));
+            var hlogBase = store.hlogBase;
+
+            // The key's first record is flushed, so its second record links to it and cannot be elided.
+            UpsertKey(1, 100);
+            store.Log.ShiftReadOnlyAddress(store.Log.TailAddress, wait: true);
+            var flushedPage = hlogBase.GetPage(hlogBase.FlushedUntilAddress);
+
+            gated.Gate = true;
+            var liveAddress = store.Log.TailAddress;
+            UpsertKey(1, 200);
+            store.Log.ShiftReadOnlyAddress(store.Log.TailAddress, wait: false);
+
+            // Fill memory through the last page that does not wait for a flush, leaving no room on it for the tombstone.
+            var k = 1;
+            var tombstoneSize = store.hlog.GetDeleteRecordSize(Key(ref k)).AllocatedInlineRecordSize;
+            var lastPage = flushedPage + hlogBase.BufferSize - 1;
+            long NextAllocationPage(int size)
+            {
+                var tail = hlogBase.GetTailAddress();
+                var offset = hlogBase.GetOffsetOnPage(tail);
+                return hlogBase.GetPage(tail) + (offset != 0 && offset + size > hlogBase.PageSize ? 1 : 0);
+            }
+            using (var filler = store.NewSession<TestSpanByteKey, int, int, Empty, EmptyValueFunctions>(new EmptyValueFunctions()))
+            {
+                for (var fk = 1000; NextAllocationPage(tombstoneSize) <= lastPage; fk++)
+                {
+                    var before = hlogBase.GetTailAddress();
+                    _ = filler.BasicContext.Upsert(Key(ref fk), []);
+                    if (fk == 1000)
+                        ClassicAssert.AreEqual(tombstoneSize, hlogBase.GetTailAddress() - before, "A filler record must take exactly the tombstone's space");
+                }
+            }
+            ClassicAssert.AreEqual(flushedPage, hlogBase.GetPage(hlogBase.FlushedUntilAddress), "No flush may complete while the gate is closed");
+            Assert.That(liveAddress, Is.GreaterThanOrEqualTo(hlogBase.HeadAddress).And.LessThan(hlogBase.ReadOnlyAddress),
+                "The live record must be in memory and read-only, so the RMW copy-updates it");
+
+            var fn = new ExpirableFunctions { expireAction = RMWAction.ExpireAndStop, declineInitialUpdate = true };
+            var rmw = Task.Factory.StartNew(() =>
+            {
+                using var s = store.NewSession<TestSpanByteKey, int, int, Empty, ExpirableFunctions>(fn);
+                var key = 1; var input = 0;
+                var status = s.BasicContext.RMW(Key(ref key), ref input);
+                if (status.IsPending)
+                {
+                    _ = s.BasicContext.CompletePendingWithOutputs(out var outputs, wait: true);
+                    using (outputs)
+                    {
+                        ClassicAssert.IsTrue(outputs.Next());
+                        status = outputs.Current.Status;
+                    }
+                }
+                return status;
+            }, TaskCreationOptions.LongRunning);
+
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+            while (Volatile.Read(ref fn.needCopyUpdateCalls) == 0)
+            {
+                Assert.That(rmw.IsCompleted, Is.False, "The RMW finished without copy-updating the live record");
+                Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "The RMW never reached NeedCopyUpdate");
+                _ = Thread.Yield();
+            }
+
+            // Past NeedCopyUpdate the RMW holds the epoch until its allocation has failed, so this action runs only after that failure.
+            using var allocationFailed = new ManualResetEventSlim();
+            store.epoch.Resume();
+            store.epoch.BumpCurrentEpoch(allocationFailed.Set);
+            store.epoch.Suspend();
+            while (!allocationFailed.IsSet)
+            {
+                Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "The RMW never released the epoch");
+                store.epoch.Resume();
+                store.epoch.ProtectAndDrain();
+                store.epoch.Suspend();
+                _ = Thread.Yield();
+            }
+
+            // Complete every captured write, including any captured as the gate opens, until the retried RMW finishes.
+            gated.Gate = false;
+            var released = 0;
+            while (!rmw.Wait(10))
+            {
+                Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "The RMW never completed");
+                for (var count = gated.PendingCount; released < count; released++)
+                    gated.Release(released);
+            }
+            for (var count = gated.PendingCount; released < count; released++)
+                gated.Release(released);
+
+            var rmwStatus = rmw.Result;
+            ClassicAssert.IsTrue(rmwStatus.Found && rmwStatus.IsExpired, $"Deleting the live record must succeed, but was {rmwStatus}");
+
+            using var reader = store.NewSession<TestSpanByteKey, int, int, Empty, SimpleIntSimpleFunctions>(new SimpleIntSimpleFunctions());
+            Status Read()
+            {
+                var key = 1; int input = 0, output = 0;
+                var status = reader.BasicContext.Read(Key(ref key), ref input, ref output);
+                if (status.IsPending)
+                {
+                    _ = reader.BasicContext.CompletePendingWithOutputs(out var outputs, wait: true);
+                    using (outputs)
+                    {
+                        ClassicAssert.IsTrue(outputs.Next());
+                        status = outputs.Current.Status;
+                    }
+                }
+                return status;
+            }
+            ClassicAssert.IsTrue(Read().NotFound, "The deleted key must be absent in memory");
+            store.Log.FlushAndEvict(wait: true);
+            ClassicAssert.IsTrue(Read().NotFound, "The deleted key must be absent once evicted");
+        }
+
         #endregion
 
         #region ExpireAndResume
@@ -362,6 +512,49 @@ namespace Tsavorite.test
             ClassicAssert.AreEqual(50, output);
             ClassicAssert.AreEqual(seedLength + valueGrowth, fn.readValueLength);
             ClassicAssert.AreEqual(ExpiredReinitWithExpirationFunctions.ExpirationTicks, fn.readExpiration);
+        }
+
+        [Test]
+        [Category("TsavoriteKV")]
+        public void DisposeOnImmutableCUExpireAndResumeTest()
+        {
+            UpsertKey(1, 100);
+            store.Log.ShiftReadOnlyAddress(store.Log.TailAddress, wait: true);
+            tracker.Reset();
+            var fn = new ExpirableFunctions { expireAction = RMWAction.ExpireAndResume, expireOnlyInCU = true };
+            using var s = store.NewSession<TestSpanByteKey, int, int, Empty, ExpirableFunctions>(fn);
+            var k = 1; var input = 50;
+            var status = s.BasicContext.RMW(Key(ref k), ref input);
+            ClassicAssert.IsTrue(status.Record.Created, status.ToString());
+            ClassicAssert.AreEqual(1, tracker.DeletedCount, "CopyUpdater ExpireAndResume: only the expired source is disposed");
+
+            var output = 0;
+            status = s.BasicContext.Read(Key(ref k), ref output);
+            ClassicAssert.IsTrue(status.Found, status.ToString());
+            ClassicAssert.AreEqual(50, output);
+        }
+
+        [Test]
+        [Category("TsavoriteKV")]
+        public void ImmutableExpireAndResumeWithoutInitialUpdateLeavesKeyAbsentTest()
+        {
+            UpsertKey(1, 100);
+            store.Log.ShiftReadOnlyAddress(store.Log.TailAddress, wait: true);
+            tracker.Reset();
+            var fn = new ExpirableFunctions { expireAction = RMWAction.ExpireAndResume, declineInitialUpdate = true };
+            using var s = store.NewSession<TestSpanByteKey, int, int, Empty, ExpirableFunctions>(fn);
+            var k = 1; var input = 50;
+            var status = s.BasicContext.RMW(Key(ref k), ref input);
+            ClassicAssert.IsFalse(status.Found, status.ToString());
+            ClassicAssert.AreEqual(1, tracker.DeletedCount, "The expired source is disposed once");
+
+            // The disposed source must not be found again, by a Read or by a later RMW
+            var output = 0;
+            status = s.BasicContext.Read(Key(ref k), ref output);
+            ClassicAssert.IsFalse(status.Found, status.ToString());
+            status = s.BasicContext.RMW(Key(ref k), ref input);
+            ClassicAssert.IsFalse(status.Found, status.ToString());
+            ClassicAssert.AreEqual(1, tracker.DeletedCount, "The expired source is not disposed again");
         }
 
         #endregion
@@ -704,6 +897,65 @@ namespace Tsavorite.test
             var input = new TestObjectInput { value = 0 };
             _ = s.BasicContext.RMW(new TestObjectKey { key = 1 }, ref input, 0);
             ClassicAssert.AreEqual(1, tracker.DisposeRecordDeletedCount, "OnDispose(Deleted) should be called exactly once");
+        }
+
+        [Test]
+        [Category("TsavoriteKV")]
+        public void ObjDisposeOnIPUFailThenCUExpireAndResumeTest()
+        {
+            // IPU fails → NCU passes → CopyUpdater returns ExpireAndResume → the new record is reinitialized by InitialUpdater
+            UpsertObj(1, 100);
+            tracker.Reset();
+            var fn = new ObjExpirableFunctions { failIPU = true, expireOnlyInCU = true, expireAction = RMWAction.ExpireAndResume };
+            AssertCUExpireAndResume(fn);
+        }
+
+        [Test]
+        [Category("TsavoriteKV")]
+        public void ObjDisposeOnImmutableCUExpireAndResumeTest()
+        {
+            UpsertObj(1, 100);
+            store.Log.ShiftReadOnlyAddress(store.Log.TailAddress, wait: true);
+            tracker.Reset();
+            var fn = new ObjExpirableFunctions { expireOnlyInCU = true, expireAction = RMWAction.ExpireAndResume };
+            AssertCUExpireAndResume(fn);
+        }
+
+        [Test]
+        [Category("TsavoriteKV")]
+        public void ObjDisposeOnDiskCUExpireAndResumeTest()
+        {
+            UpsertObj(1, 100);
+            store.Log.FlushAndEvict(wait: true);
+            tracker.Reset();
+            var fn = new ObjExpirableFunctions { expireOnlyInCU = true, expireAction = RMWAction.ExpireAndResume };
+            AssertCUExpireAndResume(fn, expectedDisposes: 0);
+        }
+
+        /// <summary>RMWs key 1 with <paramref name="fn"/>, whose CopyUpdater expires the source, and verifies the source alone was disposed and the record now holds
+        /// the initial value. A source on disk has no in-memory record to dispose.</summary>
+        private void AssertCUExpireAndResume(ObjExpirableFunctions fn, int expectedDisposes = 1)
+        {
+            using var s = store.NewSession<TestObjectKey, TestObjectInput, TestObjectOutput, int, ObjExpirableFunctions>(fn);
+            var input = new TestObjectInput { value = 50 };
+            // Context 1 makes RMWCompletionCallback assert !Found: the expired source counts as not found.
+            var status = s.BasicContext.RMW(new TestObjectKey { key = 1 }, ref input, 1);
+            if (status.IsPending)
+            {
+                _ = s.BasicContext.CompletePendingWithOutputs(out var outputs, wait: true);
+                using (outputs)
+                {
+                    ClassicAssert.IsTrue(outputs.Next());
+                    status = outputs.Current.Status;
+                }
+            }
+            ClassicAssert.IsTrue(status.Record.Created, status.ToString());
+            ClassicAssert.AreEqual(expectedDisposes, tracker.DisposeRecordDeletedCount, "OnDispose(Deleted) should be called only for the expired source");
+
+            TestObjectOutput output = default;
+            status = s.BasicContext.Read(new TestObjectKey { key = 1 }, ref output, 0);
+            ClassicAssert.IsTrue(status.Found, status.ToString());
+            ClassicAssert.AreEqual(50, output.value.value);
         }
 
         #endregion
