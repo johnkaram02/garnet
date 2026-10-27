@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793122029552,
+  "lastUpdate": 1793122042055,
   "repoUrl": "https://github.com/microsoft/garnet",
   "entries": {
     "Benchmark": [],
@@ -738901,390 +738901,6 @@ window.BENCHMARK_DATA = {
             "username": "web-flow"
           },
           "distinct": true,
-          "id": "b94939630e792cc279b0965de1f18d6ef6108622",
-          "message": "Fix CompletionEvent disposal and reset bugs, and coalesce LogSizeTracker signals (#2198)\n\n* Fix CompletionEvent disposal, reset and per-record signalling\n\nCompletionEvent signals by allocating a fresh SemaphoreSlim, swapping it in, releasing the retired one, and abandoning it. That design is kept -- it delegates sync waits, async waits, cancellation and timeouts to SemaphoreSlim -- but it had several bugs around its edges, and one of its callers signalled far more often than it needed to.\n\nLogSizeTracker signalled on every object-bearing record while over budget, which is the steady state for a memory-capped instance: InternalUpsert, InternalRMW and InternalDelete all call IncrementSize on the insert path. A resizePending flag now coalesces that, so an over-budget record update costs one read of a line written only on the signal edge and on resizer wakeups. Measured at 16 threads, that path goes from 5.8M to 3052M updates/s.\n\nResizerTask must capture the event generation, then clear the flag, then sample sizes. Clearing before capturing loses wakeups: a signaller in that window has its signal consumed by the capture rather than the wait, while the flag stays latched, parking the resizer for the full ResizeTaskDelaySeconds with work outstanding and stalling the allocation retry loop NeedToWaitForClose drives through Signal().\n\nDispose() disposed the semaphore and nulled the field. SemaphoreSlim.Dispose() does not pulse, so threads parked in the infinite waits -- ShiftBeginAddress, TsavoriteLog.AllocateBlock, the ALLOCATE_FAILED retry -- were never woken; a capture taken beforehand threw ObjectDisposedException from inside an RMW with its epoch suspended; and a wait on the live field threw NullReferenceException. It now releases the live generation and CAS-installs a permanently signaled tombstone, so every waiter present and future falls through and its own retry loop can observe the owner's shutdown state. Set() refuses to replace the tombstone, which would otherwise un-signal a disposed event and double-release it.\n\nBecause disposal now wakes waiters, the retry loops need terminal checks or they would spin where they used to hang: AllocatorBase gains IsDisposed/ThrowIfDisposed, and the checks are added to WaitToRetryNow, ShiftBeginAddress, HandleOperationStatus's ALLOCATE_FAILED case, both AllocateBlock overloads, AllocateBlockPartial, and the ten async enqueue loops, where an already-completed await does not yield and would spin at full CPU. ShiftBeginAddress returns rather than falling through, because its head shift is uncapped and the OnPagesClosed that follows would free pages concurrently with the teardown Dispose is already performing. AllocatorBase.Dispose now releases flushEvent waiters before tearing down the epoch and buffer pool they would otherwise touch on the way out.\n\nAllocatorBase.ResetCore called flushEvent.Initialize(), which overwrites the field without releasing the outgoing semaphore, so anyone parked on it was stranded -- every later Set() signals the new instance. It now calls Set().\n\nGarnet.client had its own copy of the type whose Set() did dispose the retired semaphore, giving GarnetClient a reachable ObjectDisposedException in the window between capturing the event and awaiting it. The duplicate is deleted in favour of the shared type via InternalsVisibleTo.\n\n* Add a sustained-pressure test for LogSizeTracker signal coalescing\n\nThe existing coverage exercised the over-budget allocation path only with the resizer stopped. The case the coalescing exists for is the opposite one: the resizer running but unable to keep up, so the heap stays over budget while inserters keep arriving. Two paths then ask for a signal on every attempt -- every object-bearing record update via IncrementSize, and every page-turn retry via NeedToWaitForClose -> Signal, the latter spinning for as long as a thread is blocked waiting for eviction.\n\nEight threads upserting 200,000 records with 4KB heap objects into a 64KB budget holds the store over budget for ~95% of sampled intervals and finishes in about 1.2s. In that state roughly 245,000 signal attempts collapse to about 1,900 actual signals, a ~125x suppression worth roughly 21MB of gen-0 garbage. Wall time is unchanged, so this is a GC-pressure and contention result rather than a throughput one.\n\nThe test asserts the premise it depends on (pressure really was sustained), that every inserter completes (the allocation path makes progress rather than livelocking), and that signals stay well under one per ten records. Removing the coalescing guard takes that last figure to ~236,000 and fails the assertion, so it is a regression test rather than a tautology.\n\nLogSizeTracker gains an internal ResizerSignalCount for this, incremented only on the path that genuinely signals, so the coalesced path is unaffected.\n\n* Wake flushEvent waiters before any allocator state is reclaimed\n\nReleasing flushEvent makes parked waiters runnable, and a waiter's epoch.Resume() calls Acquire(), which drains pending epoch actions when drainCount > 0. Those actions include the page-close callbacks that dereference allocator state, so where the release happens decides what that drain can touch.\n\nReleasing it in AllocatorBase.Dispose() was too late for the object allocator: ObjectAllocatorImpl.Dispose() clears objectPages and the page values before calling base.Dispose(), and a page-close callback drained against a null objectPages is escalated to FailFast by OnPagesClosedWorker. Move the release into StopSizeTrackerForDispose(), which both Dispose() overrides call before reclaiming anything, so waiters are woken while that state is still intact. It goes before Stop(wait: true) as well, so a resizer parked on flushEvent cannot keep that wait spinning.\n\nThis narrows the window rather than closing it, and the XML doc now says so: a thread can still begin a fresh allocation at any point during teardown and drain a callback on its way in. Disposing an allocator with operations in flight is unsafe by contract and has to be prevented by the owner, which is why the resizer -- the one actor this class owns -- is stopped and waited for here.\n\nShiftBeginAddress had a second route past the disposal check: the flush-completed break skipped it and went on to the uncapped head shift. The check now sits after the wait loop so it covers every exit, including the noFlush path.\n\nThe sustained-pressure test leaked its sampler thread when an inserter timed out: the assertion threw before stopSampling was set, so the sampler kept reading tracker while TearDown cleared it, replacing the intended timeout failure with a NullReferenceException. Stop and join it in a finally, and make it a background thread so it can never hold up the test host.\n\n---------\n\nCo-authored-by: Ted Hart <tedhar@users.noreply.github.com>",
-          "timestamp": "2026-10-02T11:52:48-07:00",
-          "tree_id": "89604fe8313d4ad4bf1ed1e91170e6aca3ae44f3",
-          "url": "https://github.com/microsoft/garnet/commit/b94939630e792cc279b0965de1f18d6ef6108622"
-        },
-        "date": 1790974978229,
-        "tool": "benchmarkdotnet",
-        "benches": [
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupHit(Params: Managed,Limit)",
-            "value": 1510.989010989011,
-            "unit": "ns",
-            "range": "± 405.9147555420827"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupMiss(Params: Managed,Limit)",
-            "value": 1377.5280898876404,
-            "unit": "ns",
-            "range": "± 119.42362430817832"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadOuterHit(Params: Managed,Limit)",
-            "value": 1878.5714285714287,
-            "unit": "ns",
-            "range": "± 77.41467147049721"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadInnerHit(Params: Managed,Limit)",
-            "value": 239085.29411764705,
-            "unit": "ns",
-            "range": "± 7217.408766642834"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadMiss(Params: Managed,Limit)",
-            "value": 1923.5294117647059,
-            "unit": "ns",
-            "range": "± 69.88659007542694"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.Digest(Params: Managed,Limit)",
-            "value": 5173.684210526316,
-            "unit": "ns",
-            "range": "± 188.42764835043022"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupHit(Params: Managed,Limit)",
-            "value": 1517.5257731958764,
-            "unit": "ns",
-            "range": "± 607.4211727456135"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupMiss(Params: Managed,Limit)",
-            "value": 1167.7083333333333,
-            "unit": "ns",
-            "range": "± 183.2426011526604"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadOuterHit(Params: Managed,Limit)",
-            "value": 1974.7252747252746,
-            "unit": "ns",
-            "range": "± 497.45874348050364"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadInnerHit(Params: Managed,Limit)",
-            "value": 238575,
-            "unit": "ns",
-            "range": "± 1167.8457245559605"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadMiss(Params: Managed,Limit)",
-            "value": 1872.7272727272727,
-            "unit": "ns",
-            "range": "± 78.83936085671918"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.Digest(Params: Managed,Limit)",
-            "value": 6444.791666666667,
-            "unit": "ns",
-            "range": "± 1167.8923699208322"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupHit(Params: Managed,None)",
-            "value": 1417.6470588235295,
-            "unit": "ns",
-            "range": "± 155.2083627074963"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupMiss(Params: Managed,None)",
-            "value": 1101.2048192771085,
-            "unit": "ns",
-            "range": "± 98.14620242099063"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadOuterHit(Params: Managed,None)",
-            "value": 1820.253164556962,
-            "unit": "ns",
-            "range": "± 103.00578380007333"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadInnerHit(Params: Managed,None)",
-            "value": 245719.23076923078,
-            "unit": "ns",
-            "range": "± 1405.574980440754"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadMiss(Params: Managed,None)",
-            "value": 1935.8974358974358,
-            "unit": "ns",
-            "range": "± 77.75528239689434"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.Digest(Params: Managed,None)",
-            "value": 5560,
-            "unit": "ns",
-            "range": "± 91.02589898327996"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupHit(Params: Managed,None)",
-            "value": 1573.469387755102,
-            "unit": "ns",
-            "range": "± 363.9845415342662"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupMiss(Params: Managed,None)",
-            "value": 1138.9473684210527,
-            "unit": "ns",
-            "range": "± 240.69700952013784"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadOuterHit(Params: Managed,None)",
-            "value": 1959.7826086956522,
-            "unit": "ns",
-            "range": "± 219.41970551148393"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadInnerHit(Params: Managed,None)",
-            "value": 246996,
-            "unit": "ns",
-            "range": "± 5327.873246740516"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadMiss(Params: Managed,None)",
-            "value": 2012.9032258064517,
-            "unit": "ns",
-            "range": "± 256.7462824977951"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.Digest(Params: Managed,None)",
-            "value": 6235.1648351648355,
-            "unit": "ns",
-            "range": "± 720.5512745073311"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupHit(Params: Native,None)",
-            "value": 1563.8297872340424,
-            "unit": "ns",
-            "range": "± 64.0160710626759"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupMiss(Params: Native,None)",
-            "value": 1282.2222222222222,
-            "unit": "ns",
-            "range": "± 211.7756804415155"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadOuterHit(Params: Native,None)",
-            "value": 2061.7977528089887,
-            "unit": "ns",
-            "range": "± 325.9620787960994"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadInnerHit(Params: Native,None)",
-            "value": 206441.66666666666,
-            "unit": "ns",
-            "range": "± 2755.3116746100472"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadMiss(Params: Native,None)",
-            "value": 2070.967741935484,
-            "unit": "ns",
-            "range": "± 197.03268607743516"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.Digest(Params: Native,None)",
-            "value": 5303.225806451613,
-            "unit": "ns",
-            "range": "± 166.30067341563776"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupHit(Params: Native,None)",
-            "value": 1226.5060240963855,
-            "unit": "ns",
-            "range": "± 81.27690901404564"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupMiss(Params: Native,None)",
-            "value": 1078.723404255319,
-            "unit": "ns",
-            "range": "± 310.002546096215"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadOuterHit(Params: Native,None)",
-            "value": 1781.25,
-            "unit": "ns",
-            "range": "± 40.311288741492746"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadInnerHit(Params: Native,None)",
-            "value": 205494.11764705883,
-            "unit": "ns",
-            "range": "± 4111.032502339785"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadMiss(Params: Native,None)",
-            "value": 2162.1052631578946,
-            "unit": "ns",
-            "range": "± 631.1386109632338"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.Digest(Params: Native,None)",
-            "value": 6804.166666666667,
-            "unit": "ns",
-            "range": "± 914.7811549236836"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupHit(Params: Tracked,Limit)",
-            "value": 1152.3255813953488,
-            "unit": "ns",
-            "range": "± 202.76137477981146"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupMiss(Params: Tracked,Limit)",
-            "value": 1320.9302325581396,
-            "unit": "ns",
-            "range": "± 172.9442474391624"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadOuterHit(Params: Tracked,Limit)",
-            "value": 2080.21978021978,
-            "unit": "ns",
-            "range": "± 452.7004847995295"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadInnerHit(Params: Tracked,Limit)",
-            "value": 265080.70175438595,
-            "unit": "ns",
-            "range": "± 11368.54115839739"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadMiss(Params: Tracked,Limit)",
-            "value": 2130.9523809523807,
-            "unit": "ns",
-            "range": "± 200.58720452902466"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.Digest(Params: Tracked,Limit)",
-            "value": 5883.333333333333,
-            "unit": "ns",
-            "range": "± 124.85285456935954"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupHit(Params: Tracked,Limit)",
-            "value": 1514.4329896907216,
-            "unit": "ns",
-            "range": "± 399.736812040552"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupMiss(Params: Tracked,Limit)",
-            "value": 1466.4948453608247,
-            "unit": "ns",
-            "range": "± 345.10880300370917"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadOuterHit(Params: Tracked,Limit)",
-            "value": 2202.1505376344085,
-            "unit": "ns",
-            "range": "± 458.0152111162229"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadInnerHit(Params: Tracked,Limit)",
-            "value": 262230.76923076925,
-            "unit": "ns",
-            "range": "± 4332.894455092849"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadMiss(Params: Tracked,Limit)",
-            "value": 2381.443298969072,
-            "unit": "ns",
-            "range": "± 301.49968798602447"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.Digest(Params: Tracked,Limit)",
-            "value": 6349.473684210527,
-            "unit": "ns",
-            "range": "± 867.8505710442405"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupHit(Params: Tracked,None)",
-            "value": 1384.4444444444443,
-            "unit": "ns",
-            "range": "± 167.54077894422733"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupMiss(Params: Tracked,None)",
-            "value": 1353.5714285714287,
-            "unit": "ns",
-            "range": "± 145.16001023501127"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadOuterHit(Params: Tracked,None)",
-            "value": 1846.875,
-            "unit": "ns",
-            "range": "± 62.136037021797534"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadInnerHit(Params: Tracked,None)",
-            "value": 255602.63157894736,
-            "unit": "ns",
-            "range": "± 8021.507806031175"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadMiss(Params: Tracked,None)",
-            "value": 2045.4545454545455,
-            "unit": "ns",
-            "range": "± 71.11130839619098"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.Digest(Params: Tracked,None)",
-            "value": 5504.597701149425,
-            "unit": "ns",
-            "range": "± 426.42593783653695"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupHit(Params: Tracked,None)",
-            "value": 1270.2702702702702,
-            "unit": "ns",
-            "range": "± 51.98752449100365"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupMiss(Params: Tracked,None)",
-            "value": 1164.4444444444443,
-            "unit": "ns",
-            "range": "± 309.15292427335464"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadOuterHit(Params: Tracked,None)",
-            "value": 1781.25,
-            "unit": "ns",
-            "range": "± 40.311288741492746"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadInnerHit(Params: Tracked,None)",
-            "value": 254621.42857142858,
-            "unit": "ns",
-            "range": "± 2993.1148096483475"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadMiss(Params: Tracked,None)",
-            "value": 1921.4285714285713,
-            "unit": "ns",
-            "range": "± 62.99407883487121"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.Digest(Params: Tracked,None)",
-            "value": 5823.636363636364,
-            "unit": "ns",
-            "range": "± 250.15819910433592"
-          }
-        ]
-      },
-      {
-        "commit": {
-          "author": {
-            "email": "15467143+TedHartMS@users.noreply.github.com",
-            "name": "Ted Hart",
-            "username": "TedHartMS"
-          },
-          "committer": {
-            "email": "noreply@github.com",
-            "name": "GitHub",
-            "username": "web-flow"
-          },
-          "distinct": true,
           "id": "fc97f951e82e6479bd61bddaa6e9de7f48b79647",
           "message": "Allocate test ports dynamically from a non-ephemeral range (#2193)\n\n* Refuse a second bind on an occupied port on Windows, and add an avalanched hash\n\nOn Windows GarnetServerTcp set SO_REUSEADDR unconditionally, and cleared\nSO_REUSEPORT only on Linux, macOS, and FreeBSD. Windows SO_REUSEADDR is\npermissive: it lets a socket bind an address and port another socket already\nholds. Two live servers therefore both bound the same port and the OS split\nincoming connections between them, so a port conflict surfaced as plausible but\nwrong results rather than as a bind failure. Windows now sets\nSO_EXCLUSIVEADDRUSE, which refuses the second bind; the Unix paths are\nunchanged. GarnetServerTcpTests covered this but was skipped on Windows because\nthe behavior it asserts did not hold there. It now runs on every platform, and\nits TIME_WAIT rebind case confirms exclusive use does not block restarts.\n\nUtility.GetHashCodeWithMix applies a MurmurHash3 fmix64 finalizer to HashBytes.\nHashBytes is a multiply-accumulate, and multiplication propagates information\nonly toward higher bits, so its low bits carry almost no entropy: flipping one\ninput bit changes some output bits with probability 1.000 rather than 0.5. The\nfinalizer's right shifts move entropy back down, which makes it safe to reduce\nthe result modulo a power of two. UtilityTests asserts the avalanche property\ndirectly, since that, rather than the hash value, is why the method exists.\n\n* Allocate test ports dynamically from a non-ephemeral range\n\nTest ports were fixed per sub-project from a base of 33278, shifted by an\noptional GARNET_TEST_PORT_SLOT offset. That base predates the slot mechanism and\nsits inside Linux's default outbound-connection range (32768-60999,\nnet.ipv4.ip_local_port_range), so on Linux the kernel could assign a test's port\nto a connect() between the moment the port was observed free and the moment the\nserver bound it. Probing cannot close that window; only staying out of the range\ncan. The slot mechanism encoded 49152 as the ephemeral floor, which is the\nWindows and macOS value, so slot 7 looked like the boundary case while slot 0 was\nalready unsafe on Linux. Windows and macOS were never affected, which is why the\nflakes were Linux-only.\n\nPorts now come from [16384, 32768), below every supported platform's ephemeral\nrange and above the crowded region that holds both ports a developer is likely to\nbe running (6379, 5432, 11211, 8080) and ports this suite itself uses\n(10000-10002 Azurite). Each test host leases one aligned 32-port block, held by\nan exclusively locked file for the life of the process, which is what keeps\nconcurrent hosts apart; the OS releases the lock on exit, crash, or kill, so a\nblock frees itself. The lease is taken first and the ports probed second, because\nsoftware outside the suite, or a server stranded by a killed run, holds ports\nwhile holding no lease.\n\nBlocks are searched from a start derived from the checkout and the project name,\nso a project returns to the same ports run after run and netstat output stays\ninterpretable. On collision the search advances by a stride derived from the\nprocess, so two hosts that start at the same block diverge rather than walking in\nlockstep. The stride is forced odd and the block count is a power of two, which\ntogether make the walk visit every block exactly once: completing it proves no\nblock is free rather than exhausting a retry budget. The hash is\nUtility.GetHashCodeWithMix, because the index is cut from the low bits that\nHashBytes alone leaves unmixed.\n\nThis replaces slots entirely. Concurrency is no longer capped at seven\ncheckouts, GARNET_TEST_PORT_SLOT is gone and nothing needs setting, and\nTestPortAssignment, ClusterPortAssignment, and the band-width invariants they\nrequired are deleted - projects are identified by assembly name, so adding one\nneeds no central registration.\n\nSpecial cases, each commented where it lives:\n- Ports 30000-30999 are carved out for test/docker-tests/validate_docker_images.py,\n  which allocates from its own fixed base and can run alongside this suite.\n  TestPortAllocatorTests reads that base out of the Python file so moving either\n  side without the other fails as a test.\n- The probe binds the IPv4 and IPv6 wildcards separately and exclusively. One\n  dual-mode socket handles IPv4-mapped addresses differently per platform, and a\n  shared bind succeeds alongside a listener on a specific address under that\n  wildcard.\n- A failed probe deliberately ignores the socket error code: Windows reports\n  AccessDenied for ports excluded by Hyper-V, WSL, or Docker, not\n  AddressAlreadyInUse.\n- Cluster nodes keep contiguous ports because node n binds base + n; block\n  alignment keeps that run from straddling a boundary.\n- GARNET_TEST_PORT_BASE pins a base port for reproduction or a fixed firewall\n  opening. Pinned ports are still leased and probed.\n\nGarnetServerTcp.Start now reports the endpoint and the operating system's reason\nwhen a bind fails, which the raw SocketException names neither of.\nTestUtils.OnTearDown adds the allocation context, so a conflict reads as software\noutside the suite rather than as a defect in Garnet or in the test.\n\n* Drop stale port-slot instructions from the add-garnet-command skill\n\nThe skill still told readers to set GARNET_TEST_PORT_SLOT, which no longer\nexists; test hosts now claim their ports without configuration.\n\n* Cover the port allocator's failure paths\n\nReserve's error paths decide whether a run stops clearly or proceeds on ports it\ndoes not own, and none of them ran in an ordinary suite: a block another host\nholds, a pinned base port, and every block exhausted. A regression in any of\nthem would surface as the silent cross-checkout corruption the allocator exists\nto prevent.\n\nLeases in these tests are redirected to a private directory. Holding blocks in\nthe shared one would stop concurrent runs in other checkouts from starting,\nwhich is the very failure under test.\n\nWriting them found a real defect in the first draft: two tests took the same\nport from a deterministic helper, and because a reservation holds its lease for\nthe life of the process while binding nothing, the second saw ports that read as\nfree inside a block that was already leased. The helper now checks both, which\nis the same distinction the allocator draws.\n\nBuildPortConflictReport is split out of ReportPortConflictIfBindFailed so the\ndecision and the wording can be asserted without making a real test fail.\n\n* Name the alternate port explicitly in ConnectionLimitAcrossListenersTests\n\nThe fixture built its second listener from TestUtils.TestPort + 1. That is the\nport TestUtils.AlternateTestPort returns, and it is inside the block this test\nhost leases, so the behavior is unchanged - but the arithmetic only works\nbecause the reservation covers two ports, which the expression does not say.\nNaming the property states the dependency the fixture actually has.\n\n* Fix overlapping pinned reservations and misleading bind diagnostics\n\nReview of the allocator found four defects, all in paths that only run when\nsomething has already gone wrong.\n\nReservePinned leased only the block containing its first port. A pinned base is\ndeliberately not block-aligned, so a run can cross into the next block: base\n16415 with two ports leases block 0 while port 16416 sits unleased in block 1.\nAnother host could lease that block and be handed an overlapping run, both\nprobes passing because neither side had bound yet. Every intersected block is\nnow leased. IntersectedBlocks also skips ports outside the allocatable range,\nwhere PortBlock is not meaningful - it returned -480 for port 1024 and 738 for\nport 40000, neither of which names a block.\n\nThe teardown report fired for every bind failure but always diagnosed a port\nconflict. GarnetServerTcp also emits \"Could not bind\" for AccessDenied, which is\na platform-reserved range, and AddressNotAvailable, which is an address absent\nfrom the machine; neither is another process taking the port. The report now\nparses the socket error and stays silent unless it is AddressAlreadyInUse.\n\nThe report read the standalone port field, which ClusterTestContext.ReservePorts\nnever sets, so every cluster bind failure claimed the host had reserved no ports\nwhile it held an eight-port run. The allocator now records each reservation and\nthe report looks up the run covering the failing port, which also lets it name\nthe project that holds it.\n\nThe report asserted that a reserved port cannot have been taken by the OS. That\nis true only inside the allocatable range. GARNET_TEST_PORT_BASE can pin a run\nabove it, where the kernel really can assign the port to an outbound connection\nbetween the probe and the bind - the one collision pinning opts into. Pinned\nruns outside the range are now described as exactly that, and an endpoint the\ntest built itself is reported as carrying no allocator guarantee at all.\n\nEach fix is covered by a test verified by reverting the fix: restoring the\nsingle-block lease reports the tail of a straddling run as still available, and\nremoving the error-code gate reports an AccessDenied failure as software outside\nthe suite.",
           "timestamp": "2026-10-02T19:54:35-07:00",
@@ -749625,6 +749241,210 @@ window.BENCHMARK_DATA = {
             "value": 5081.25,
             "unit": "ns",
             "range": "± 101.447851956888"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "kmontrose@microsoft.com",
+            "name": "kevin-montrose",
+            "username": "kevin-montrose"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0033adc656fa1cd5e989b6153d8f75b94ffb96e8",
+          "message": "impose limits for individual arrays in GarnetClient responses, matching RespCommand's limit (#2302)",
+          "timestamp": "2026-10-27T13:22:27-04:00",
+          "tree_id": "a529090def0aef0c622f0684ceb0639ab3b5acd9",
+          "url": "https://github.com/microsoft/garnet/commit/0033adc656fa1cd5e989b6153d8f75b94ffb96e8"
+        },
+        "date": 1793122028977,
+        "tool": "benchmarkdotnet",
+        "benches": [
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupHit(Params: Managed,Limit)",
+            "value": 1250.5376344086021,
+            "unit": "ns",
+            "range": "± 163.9350719260117"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupMiss(Params: Managed,Limit)",
+            "value": 1092.9411764705883,
+            "unit": "ns",
+            "range": "± 163.14486353728535"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadOuterHit(Params: Managed,Limit)",
+            "value": 2423.404255319149,
+            "unit": "ns",
+            "range": "± 389.49251015336404"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadInnerHit(Params: Managed,Limit)",
+            "value": 238661.53846153847,
+            "unit": "ns",
+            "range": "± 1709.063321207683"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadMiss(Params: Managed,Limit)",
+            "value": 2166.304347826087,
+            "unit": "ns",
+            "range": "± 315.628510917448"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.Digest(Params: Managed,Limit)",
+            "value": 7527.173913043478,
+            "unit": "ns",
+            "range": "± 1187.1198186903362"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupHit(Params: Managed,None)",
+            "value": 1882.7956989247311,
+            "unit": "ns",
+            "range": "± 594.8371453990721"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupMiss(Params: Managed,None)",
+            "value": 1168.4782608695652,
+            "unit": "ns",
+            "range": "± 293.493301803526"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadOuterHit(Params: Managed,None)",
+            "value": 1871.111111111111,
+            "unit": "ns",
+            "range": "± 417.45468554311094"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadInnerHit(Params: Managed,None)",
+            "value": 248076.92307692306,
+            "unit": "ns",
+            "range": "± 1873.1229921149716"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadMiss(Params: Managed,None)",
+            "value": 2616.494845360825,
+            "unit": "ns",
+            "range": "± 510.4492327783306"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.Digest(Params: Managed,None)",
+            "value": 7790.625,
+            "unit": "ns",
+            "range": "± 1162.5813497286294"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupHit(Params: Native,None)",
+            "value": 1326.595744680851,
+            "unit": "ns",
+            "range": "± 367.84040833383557"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupMiss(Params: Native,None)",
+            "value": 1158.139534883721,
+            "unit": "ns",
+            "range": "± 186.2731178098565"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadOuterHit(Params: Native,None)",
+            "value": 2388.8888888888887,
+            "unit": "ns",
+            "range": "± 447.5763557843272"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadInnerHit(Params: Native,None)",
+            "value": 214763.33333333334,
+            "unit": "ns",
+            "range": "± 3115.827490792928"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadMiss(Params: Native,None)",
+            "value": 2382.4742268041236,
+            "unit": "ns",
+            "range": "± 287.59429949089105"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.Digest(Params: Native,None)",
+            "value": 7818.686868686868,
+            "unit": "ns",
+            "range": "± 1626.2920429958215"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupHit(Params: Tracked,Limit)",
+            "value": 1707.4468085106382,
+            "unit": "ns",
+            "range": "± 509.319461973076"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupMiss(Params: Tracked,Limit)",
+            "value": 1286.8131868131868,
+            "unit": "ns",
+            "range": "± 335.06509855343074"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadOuterHit(Params: Tracked,Limit)",
+            "value": 2097.8260869565215,
+            "unit": "ns",
+            "range": "± 387.1502706433835"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadInnerHit(Params: Tracked,Limit)",
+            "value": 266541.3793103448,
+            "unit": "ns",
+            "range": "± 14599.152187267891"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadMiss(Params: Tracked,Limit)",
+            "value": 2467.816091954023,
+            "unit": "ns",
+            "range": "± 574.7586455794036"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.Digest(Params: Tracked,Limit)",
+            "value": 7386.59793814433,
+            "unit": "ns",
+            "range": "± 1046.6841359323123"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupHit(Params: Tracked,None)",
+            "value": 1622.8260869565217,
+            "unit": "ns",
+            "range": "± 371.8392837481887"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LookupMiss(Params: Tracked,None)",
+            "value": 1411.7021276595744,
+            "unit": "ns",
+            "range": "± 454.8085696743058"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadOuterHit(Params: Tracked,None)",
+            "value": 2267.7419354838707,
+            "unit": "ns",
+            "range": "± 576.1871092386006"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadInnerHit(Params: Tracked,None)",
+            "value": 265623.07692307694,
+            "unit": "ns",
+            "range": "± 4199.83210897647"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.LoadMiss(Params: Tracked,None)",
+            "value": 2355.1020408163267,
+            "unit": "ns",
+            "range": "± 425.02212167523464"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScriptCacheOperations.Digest(Params: Tracked,None)",
+            "value": 7874.742268041237,
+            "unit": "ns",
+            "range": "± 1427.85028742476"
           }
         ]
       }
