@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793122096200,
+  "lastUpdate": 1793122107415,
   "repoUrl": "https://github.com/microsoft/garnet",
   "entries": {
     "Benchmark": [],
@@ -792455,78 +792455,6 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "laurianti@gmail.com",
-            "name": "Federico Laurianti",
-            "username": "Laurianti"
-          },
-          "committer": {
-            "email": "noreply@github.com",
-            "name": "GitHub",
-            "username": "web-flow"
-          },
-          "distinct": true,
-          "id": "143adec7cdd19ac10e26b40dc859c7a618f8c00b",
-          "message": "Use a new ObjectOutput for each key in HCOLLECT and ZCOLLECT (#2200)\n\nCo-authored-by: Badrish Chandramouli <badrishc@microsoft.com>",
-          "timestamp": "2026-10-02T11:20:26-07:00",
-          "tree_id": "66e4e339d48f4d9aa38e8897af3f5b7fb4d8376b",
-          "url": "https://github.com/microsoft/garnet/commit/143adec7cdd19ac10e26b40dc859c7a618f8c00b"
-        },
-        "date": 1790972195375,
-        "tool": "benchmarkdotnet",
-        "benches": [
-          {
-            "name": "BDN.benchmark.Operations.BasicOperations.InlinePing(Params: AAD)",
-            "value": 1931.252161661784,
-            "unit": "ns",
-            "range": "± 11.481342311155554"
-          },
-          {
-            "name": "BDN.benchmark.Operations.BasicOperations.InlinePing(Params: AAD)",
-            "value": 1858.3674430847168,
-            "unit": "ns",
-            "range": "± 5.408171654754427"
-          },
-          {
-            "name": "BDN.benchmark.Operations.BasicOperations.InlinePing(Params: ACL)",
-            "value": 1569.49097769601,
-            "unit": "ns",
-            "range": "± 7.222098919938337"
-          },
-          {
-            "name": "BDN.benchmark.Operations.BasicOperations.InlinePing(Params: ACL)",
-            "value": 1507.9302724202473,
-            "unit": "ns",
-            "range": "± 8.54862582990023"
-          },
-          {
-            "name": "BDN.benchmark.Operations.BasicOperations.InlinePing(Params: AOF)",
-            "value": 1685.3770622840295,
-            "unit": "ns",
-            "range": "± 14.59734768579625"
-          },
-          {
-            "name": "BDN.benchmark.Operations.BasicOperations.InlinePing(Params: AOF)",
-            "value": 1599.214719136556,
-            "unit": "ns",
-            "range": "± 10.853733416658267"
-          },
-          {
-            "name": "BDN.benchmark.Operations.BasicOperations.InlinePing(Params: None)",
-            "value": 1532.4208958943684,
-            "unit": "ns",
-            "range": "± 19.49437890209343"
-          },
-          {
-            "name": "BDN.benchmark.Operations.BasicOperations.InlinePing(Params: None)",
-            "value": 1570.867207845052,
-            "unit": "ns",
-            "range": "± 6.22621052046659"
-          }
-        ]
-      },
-      {
-        "commit": {
-          "author": {
             "email": "15467143+TedHartMS@users.noreply.github.com",
             "name": "Ted Hart",
             "username": "TedHartMS"
@@ -794945,6 +794873,54 @@ window.BENCHMARK_DATA = {
             "value": 1433.375523885091,
             "unit": "ns",
             "range": "± 7.690079263629408"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "kmontrose@microsoft.com",
+            "name": "kevin-montrose",
+            "username": "kevin-montrose"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0033adc656fa1cd5e989b6153d8f75b94ffb96e8",
+          "message": "impose limits for individual arrays in GarnetClient responses, matching RespCommand's limit (#2302)",
+          "timestamp": "2026-10-27T13:22:27-04:00",
+          "tree_id": "a529090def0aef0c622f0684ceb0639ab3b5acd9",
+          "url": "https://github.com/microsoft/garnet/commit/0033adc656fa1cd5e989b6153d8f75b94ffb96e8"
+        },
+        "date": 1793122079346,
+        "tool": "benchmarkdotnet",
+        "benches": [
+          {
+            "name": "BDN.benchmark.Operations.BasicOperations.InlinePing(Params: AAD)",
+            "value": 2026.0364214579265,
+            "unit": "ns",
+            "range": "± 5.312370699423063"
+          },
+          {
+            "name": "BDN.benchmark.Operations.BasicOperations.InlinePing(Params: ACL)",
+            "value": 1887.8685290996846,
+            "unit": "ns",
+            "range": "± 24.2632264726919"
+          },
+          {
+            "name": "BDN.benchmark.Operations.BasicOperations.InlinePing(Params: AOF)",
+            "value": 1821.58020564488,
+            "unit": "ns",
+            "range": "± 16.75041003356576"
+          },
+          {
+            "name": "BDN.benchmark.Operations.BasicOperations.InlinePing(Params: None)",
+            "value": 1864.7900263468425,
+            "unit": "ns",
+            "range": "± 14.22048736983415"
           }
         ]
       }
