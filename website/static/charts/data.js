@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793137851416,
+  "lastUpdate": 1793137898738,
   "repoUrl": "https://github.com/microsoft/garnet",
   "entries": {
     "Benchmark": [],
@@ -735661,78 +735661,6 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "kmontrose@microsoft.com",
-            "name": "kevin-montrose",
-            "username": "kevin-montrose"
-          },
-          "committer": {
-            "email": "noreply@github.com",
-            "name": "GitHub",
-            "username": "web-flow"
-          },
-          "distinct": true,
-          "id": "c9e9306e55e2060686a9f2502fb091e97d62005b",
-          "message": "Update testcerts (#2202)",
-          "timestamp": "2026-10-05T18:30:31-07:00",
-          "tree_id": "9fb39923536bb5ed768c4beac5e50c368e4cb774",
-          "url": "https://github.com/microsoft/garnet/commit/c9e9306e55e2060686a9f2502fb091e97d62005b"
-        },
-        "date": 1791250657792,
-        "tool": "benchmarkdotnet",
-        "benches": [
-          {
-            "name": "BDN.benchmark.Operations.TxnOperations.MultiExec(Params: AAD)",
-            "value": 125750.49754115513,
-            "unit": "ns",
-            "range": "± 846.0583564397975"
-          },
-          {
-            "name": "BDN.benchmark.Operations.TxnOperations.MultiExec(Params: AAD)",
-            "value": 140358.11450195312,
-            "unit": "ns",
-            "range": "± 356.4644096305641"
-          },
-          {
-            "name": "BDN.benchmark.Operations.TxnOperations.MultiExec(Params: ACL)",
-            "value": 60715.77865804036,
-            "unit": "ns",
-            "range": "± 65.78022197508037"
-          },
-          {
-            "name": "BDN.benchmark.Operations.TxnOperations.MultiExec(Params: ACL)",
-            "value": 79560.04740687778,
-            "unit": "ns",
-            "range": "± 157.83044413662628"
-          },
-          {
-            "name": "BDN.benchmark.Operations.TxnOperations.MultiExec(Params: AOF)",
-            "value": 171193.50073242188,
-            "unit": "ns",
-            "range": "± 544.9982078526987"
-          },
-          {
-            "name": "BDN.benchmark.Operations.TxnOperations.MultiExec(Params: AOF)",
-            "value": 187170.49516950335,
-            "unit": "ns",
-            "range": "± 464.1459476597999"
-          },
-          {
-            "name": "BDN.benchmark.Operations.TxnOperations.MultiExec(Params: None)",
-            "value": 122126.10063825335,
-            "unit": "ns",
-            "range": "± 683.0335467747751"
-          },
-          {
-            "name": "BDN.benchmark.Operations.TxnOperations.MultiExec(Params: None)",
-            "value": 144615.25334284856,
-            "unit": "ns",
-            "range": "± 133.8984732809454"
-          }
-        ]
-      },
-      {
-        "commit": {
-          "author": {
             "email": "15467143+TedHartMS@users.noreply.github.com",
             "name": "Ted Hart",
             "username": "TedHartMS"
@@ -738079,6 +738007,54 @@ window.BENCHMARK_DATA = {
             "value": 119295.432419997,
             "unit": "ns",
             "range": "± 1396.8946479152105"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "badrishc@microsoft.com",
+            "name": "Badrish Chandramouli",
+            "username": "badrishc"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "df36a8553e2c10aaf97e3f1d8f51052a891eafc3",
+          "message": "Do not block in blocking commands run by EXEC or a script (#2285)\n\nA blocking list or sorted-set command run by EXEC on an empty key waited\nfor an item while the transaction held the key's exclusive lock. No client\ncould push to the key, so the connection hung, along with every other\nclient writing that key.\n\nSessions running a transaction or a script now serve these commands\nwithout waiting: they return an available item or reply as on timeout.\n\nA push run by EXEC also no longer waits for the item broker when notifying\nwaiters, since the broker may be waiting for a key lock the transaction\nholds.\n\nFixes #2266\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+          "timestamp": "2026-10-27T14:48:08-07:00",
+          "tree_id": "fceecfaed06ea6a1958da3b3e38c9950763b98f0",
+          "url": "https://github.com/microsoft/garnet/commit/df36a8553e2c10aaf97e3f1d8f51052a891eafc3"
+        },
+        "date": 1793137887191,
+        "tool": "benchmarkdotnet",
+        "benches": [
+          {
+            "name": "BDN.benchmark.Operations.TxnOperations.MultiExec(Params: AAD)",
+            "value": 63928.87315955529,
+            "unit": "ns",
+            "range": "± 486.96833335303364"
+          },
+          {
+            "name": "BDN.benchmark.Operations.TxnOperations.MultiExec(Params: ACL)",
+            "value": 28213.226662772042,
+            "unit": "ns",
+            "range": "± 128.5243657689577"
+          },
+          {
+            "name": "BDN.benchmark.Operations.TxnOperations.MultiExec(Params: AOF)",
+            "value": 85651.70442708333,
+            "unit": "ns",
+            "range": "± 586.0767845403913"
+          },
+          {
+            "name": "BDN.benchmark.Operations.TxnOperations.MultiExec(Params: None)",
+            "value": 62981.760986328125,
+            "unit": "ns",
+            "range": "± 360.4042106360055"
           }
         ]
       }
