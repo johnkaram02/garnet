@@ -30,7 +30,7 @@ namespace Tsavorite.epoch.litmus
             }
 
             var emulated = Emulation.Detect();
-            var epochName = options.Buggy ? "buggy" : "fixed";
+            var epochName = options.Drain ? "production" : options.Buggy ? "buggy" : "fixed";
 
             if (!Platform.IsSupported)
             {
@@ -55,6 +55,9 @@ namespace Tsavorite.epoch.litmus
                 Console.Error.WriteLine("Run on native hardware.");
                 return Finish(options, report, ExitUnsupported, "emulated");
             }
+
+            if (options.Drain)
+                return RunDrain(options, cores, report);
 
             // The epoch under test is a generic type argument rather than an interface reference so
             // the harness JITs down to direct calls.
@@ -125,6 +128,62 @@ namespace Tsavorite.epoch.litmus
             return Finish(options, report, ExitPass, "pass");
         }
 
+        static int RunDrain(Options options, CoreLayout cores, Report report)
+        {
+            DrainLitmusResult Run(int seconds, bool control) => control
+                ? new DrainLitmus<ReorderedReleaseEpoch>(new ReorderedReleaseEpoch(), TimeSpan.FromSeconds(seconds), cores).Run()
+                : new DrainLitmus<FixedEpoch>(new FixedEpoch(), TimeSpan.FromSeconds(seconds), cores).Run();
+
+            if (!options.NoControl)
+            {
+                Console.WriteLine($"-- control: Suspend() reads drainCount before clearing the slot, for {options.ControlSeconds}s, to prove the detector is live");
+                var control = Run(options.ControlSeconds, control: true);
+                Console.WriteLine($"   {control}");
+                report.Control = Summary.From(control);
+
+                if (control.Stranded == 0)
+                {
+                    Console.Error.WriteLine("INCONCLUSIVE: THE DETECTOR IS BLIND. The reordering was forced and no drain was reported stranded, so any clean verdict from this build would be worthless.");
+                    return Finish(options, report, ExitInconclusive, "detector-blind");
+                }
+
+                Console.WriteLine($"   detector is live ({control.Stranded:N0} stranded drains observed under forced reordering)");
+            }
+
+            if (options.SelfTestOnly)
+            {
+                Console.WriteLine("PASS: control only, main stress run skipped");
+                return Finish(options, report, ExitPass, "control-only");
+            }
+
+            for (var i = 1; i <= options.Iterations; i++)
+            {
+                var label = options.Iterations == 1 ? "-- stress" : $"-- stress {i}/{options.Iterations}";
+                Console.WriteLine($"{label}: {options.Seconds}s, epoch=production (checked-out source)");
+
+                var result = Run(options.Seconds, control: false);
+                Console.WriteLine($"   {result}");
+                report.Runs.Add(Summary.From(result));
+
+                if (result.Stranded > 0)
+                {
+                    Console.Error.WriteLine($"VIOLATION: both threads left the epoch with a drain action pending - lost wakeup. {result}");
+                    return Finish(options, report, ExitViolation, "violation");
+                }
+            }
+
+            // A clean run only means something if both orderings of the two Suspend() calls occurred.
+            var totals = report.Totals;
+            if (totals.SampledRounds == 0)
+            {
+                Console.Error.WriteLine("INCONCLUSIVE: the jitter never placed the suspender's Suspend() on both sides of the bump, so the race window was never straddled");
+                return Finish(options, report, ExitInconclusive, "never-sampled");
+            }
+
+            Console.WriteLine($"PASS: no stranded drain in {totals.ElapsedSeconds:F1}s across {totals.Rounds:N0} rounds");
+            return Finish(options, report, ExitPass, "pass");
+        }
+
         static int Finish(Options options, Report report, int exitCode, string verdict)
         {
             report.Verdict = verdict;
@@ -152,8 +211,16 @@ namespace Tsavorite.epoch.litmus
             var distinctDisturberCores = new HashSet<int>(cores.DisturberCores).Count;
             if (cores.DisturberCores.Length > distinctDisturberCores)
                 Console.WriteLine($"  WARNING: {cores.DisturberCores.Length} disturbers over {distinctDisturberCores} cores - oversubscribed, they will share processors");
-            Console.WriteLine($"  stress    {options.Seconds}s x {options.Iterations}, deref={options.Deref}");
-            Console.WriteLine($"  epoch     {(options.Buggy ? "BuggyLightEpoch (pre-fix - expected to FAIL)" : "LightEpoch (fixed)")}");
+            if (options.Drain)
+            {
+                Console.WriteLine($"  stress    drain litmus, {options.Seconds}s x {options.Iterations}");
+                Console.WriteLine("  epoch     LightEpoch (checked-out production source)");
+            }
+            else
+            {
+                Console.WriteLine($"  stress    {options.Seconds}s x {options.Iterations}, deref={options.Deref}");
+                Console.WriteLine($"  epoch     {(options.Buggy ? "BuggyLightEpoch (pre-fix - expected to FAIL)" : "LightEpoch (fixed)")}");
+            }
 
             if (emulated.IsEmulated)
                 Console.WriteLine($"  EMULATION DETECTED: {emulated.Evidence} - memory-ordering results from this run are not evidence about the emulated architecture");
@@ -192,6 +259,9 @@ namespace Tsavorite.epoch.litmus
                     case "--buggy":
                         options.Buggy = true;
                         break;
+                    case "--drain":
+                        options.Drain = true;
+                        break;
                     case "--self-test":
                         options.SelfTestOnly = true;
                         break;
@@ -212,6 +282,7 @@ namespace Tsavorite.epoch.litmus
             if (options.Iterations <= 0) { error = "--iterations must be positive"; return false; }
             if (options.Disturbers < 0) { error = "--disturbers cannot be negative"; return false; }
             if (options.SelfTestOnly && options.NoControl) { error = "--self-test and --no-control cancel each other out"; return false; }
+            if (options.Drain && options.Buggy) { error = "--buggy applies only to the quarantine litmus; --drain tests the checked-out production source"; return false; }
 
             return true;
         }
@@ -248,6 +319,9 @@ namespace Tsavorite.epoch.litmus
               --no-control         skip the control (a clean result then proves much less)
               --buggy              run against BuggyLightEpoch (the pre-fix version) instead of the
                                    fixed one, to confirm the harness still catches the bug here
+              --drain              run the drain litmus instead: a thread leaving the epoch races a
+                                   BumpCurrentEpoch, and the run asserts the action is never left
+                                   pending once both have suspended (--deref does not apply)
               --json PATH          write a machine-readable summary ('-' for stdout)
               -h, --help           this message
 
@@ -257,7 +331,7 @@ namespace Tsavorite.epoch.litmus
 
             exit codes:
               0  pass          no violation, and the run demonstrably raced and reclaimed
-              1  violation     a protected reader read a recycled page
+              1  violation     a protected reader read a recycled page, or (--drain) a drain was stranded
               2  inconclusive  detector blind, race never sampled, nothing reclaimed, or emulated
               3  unsupported   wrong OS, or fewer than 4 logical processors
               64 usage error
@@ -273,6 +347,7 @@ namespace Tsavorite.epoch.litmus
             internal bool SelfTestOnly;
             internal bool NoControl;
             internal bool Buggy;
+            internal bool Drain;
             internal string JsonPath;
         }
 
@@ -292,6 +367,17 @@ namespace Tsavorite.epoch.litmus
                 Rounds = r.Rounds,
                 Drains = r.Drains,
                 Quarantines = r.Quarantines,
+                ElapsedSeconds = r.Elapsed.TotalSeconds
+            };
+
+            // Violations are stranded drains. A drain round is sampled when it falls on the rarer side of the
+            // race, so SampledRounds is 0 unless the jitter put the suspender's Suspend() on both sides of the bump.
+            internal static Summary From(DrainLitmusResult r) => new()
+            {
+                Violations = r.Stranded,
+                SampledRounds = Math.Min(r.DrainedBySuspender, r.DrainedByBumper),
+                Rounds = r.Rounds,
+                Drains = r.DrainedBySuspender + r.DrainedByBumper,
                 ElapsedSeconds = r.Elapsed.TotalSeconds
             };
 

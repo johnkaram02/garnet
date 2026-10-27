@@ -41,6 +41,48 @@ dotnet run -f net10.0 -c Release --project playground/LightEpochLitmus -- --seco
 
 The first is expected to exit `1` with violations, the second `0`.
 
+## Drain litmus: stranded actions on epoch release
+
+`--drain` tests the **checked-out production `Tsavorite.core.LightEpoch`**. The client
+compiles that same source under its own namespace. There is no substituted volatile
+implementation in the stress run: checking out the pre-fix or post-fix commit changes
+the behavior exercised by the identical command:
+
+```powershell
+dotnet run -f net10.0 -c Release --project playground\LightEpochLitmus -- --drain --seconds 180
+```
+
+Rebuild on each checkout; do not use `--no-build`.
+
+Two pinned threads enter the epoch. One suspends after a swept jitter delay. The other
+calls `BumpCurrentEpoch(action)` and suspends. Once both have returned, the action must
+have run. A third rendezvous prevents the next round's `Resume()` from rescuing a
+pending action before it is counted.
+
+With `Volatile.Write` in `Release()`, the slot clear can remain buffered while the
+leaving thread reads `drainCount == 0`. The bumper can increment `drainCount`, still
+see that slot occupied, and also return without running the action. With no further
+epoch activity, the action remains stranded indefinitely. A flush callback can
+therefore leave socket requests unsent; this harness tests the underlying epoch
+failure without requiring networking.
+
+The next round deliberately rescues stranded actions so the harness can count
+multiple occurrences instead of hanging forever. `stranded > 0` exits `1`.
+`Interlocked.Exchange` on the slot clear closes this store-to-load window; a clean,
+sampled run exits `0`. A finite clean run is evidence, not proof: on native x64,
+the checked-out volatile-only release stranded 4 actions in 37.7M rounds over 180s,
+after a separate 60s run observed none.
+Use longer durations or `--iterations` if necessary.
+
+The control runs first. It generates an epoch copy whose `Suspend()` reads
+`drainCount` before clearing the slot, with a bounded 64-iteration `Thread.SpinWait`
+to widen that calibrated race window without scheduler yielding. The build fails
+if the edit no longer matches. The control must strand an action or the run exits
+`2` (inconclusive). `--self-test` runs only the control, and `--no-control` skips it.
+A clean stress result is also inconclusive unless both `drainedBySuspender` and
+`drainedByBumper` are nonzero. These counters establish that both execution orders
+were exercised; they cannot prove that every possible race was sampled.
+
 ## Do not run this under emulation
 
 QEMU — `--platform linux/arm64` on an x86 host, say — does not reproduce the emulated
