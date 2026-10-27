@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793140154940,
+  "lastUpdate": 1793140187669,
   "repoUrl": "https://github.com/microsoft/garnet",
   "entries": {
     "Benchmark": [],
@@ -748119,150 +748119,6 @@ window.BENCHMARK_DATA = {
             "username": "web-flow"
           },
           "distinct": true,
-          "id": "8f4826642f0ffdeb37f3e9816860a371a9f355a3",
-          "message": "Remove the per-write allocations from the chunked object AOF path, and bound chunk buffering (#2182)",
-          "timestamp": "2026-10-06T12:55:52-07:00",
-          "tree_id": "ed4a967223efb3aea96027a7885c021b31af1724",
-          "url": "https://github.com/microsoft/garnet/commit/8f4826642f0ffdeb37f3e9816860a371a9f355a3"
-        },
-        "date": 1791317087959,
-        "tool": "benchmarkdotnet",
-        "benches": [
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script1(Params: Managed,Limit)",
-            "value": 117.88081097602844,
-            "unit": "ns",
-            "range": "± 0.06069274310011412"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script2(Params: Managed,Limit)",
-            "value": 142.37692785263062,
-            "unit": "ns",
-            "range": "± 0.09402360603464661"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script3(Params: Managed,Limit)",
-            "value": 223.2784151480748,
-            "unit": "ns",
-            "range": "± 0.21060920883045225"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script4(Params: Managed,Limit)",
-            "value": 244.60476820285504,
-            "unit": "ns",
-            "range": "± 0.11670392589705213"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script1(Params: Managed,None)",
-            "value": 118.8559962786161,
-            "unit": "ns",
-            "range": "± 0.047625321258539445"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script2(Params: Managed,None)",
-            "value": 145.37143092496055,
-            "unit": "ns",
-            "range": "± 0.3346103400453852"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script3(Params: Managed,None)",
-            "value": 218.7467222213745,
-            "unit": "ns",
-            "range": "± 0.12130066279885054"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script4(Params: Managed,None)",
-            "value": 253.94962283543177,
-            "unit": "ns",
-            "range": "± 0.16460895970258266"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script1(Params: Native,None)",
-            "value": 117.93012019566127,
-            "unit": "ns",
-            "range": "± 0.11693513531757549"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script2(Params: Native,None)",
-            "value": 146.25291216373444,
-            "unit": "ns",
-            "range": "± 0.12316448805968423"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script3(Params: Native,None)",
-            "value": 210.25745314359665,
-            "unit": "ns",
-            "range": "± 0.23742560798348003"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script4(Params: Native,None)",
-            "value": 255.1637722969055,
-            "unit": "ns",
-            "range": "± 0.19639538474789647"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script1(Params: Tracked,Limit)",
-            "value": 117.76759011404855,
-            "unit": "ns",
-            "range": "± 0.09800999159559796"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script2(Params: Tracked,Limit)",
-            "value": 142.45180015904563,
-            "unit": "ns",
-            "range": "± 0.19926256391086247"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script3(Params: Tracked,Limit)",
-            "value": 216.16341405648453,
-            "unit": "ns",
-            "range": "± 0.20448281125016823"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script4(Params: Tracked,Limit)",
-            "value": 243.58785163439236,
-            "unit": "ns",
-            "range": "± 0.15961894480877614"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script1(Params: Tracked,None)",
-            "value": 116.51240155788568,
-            "unit": "ns",
-            "range": "± 0.23865807967390162"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script2(Params: Tracked,None)",
-            "value": 142.81682855742318,
-            "unit": "ns",
-            "range": "± 0.169931553343703"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script3(Params: Tracked,None)",
-            "value": 217.0300773211888,
-            "unit": "ns",
-            "range": "± 0.35598647541471884"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaScripts.Script4(Params: Tracked,None)",
-            "value": 248.7167532602946,
-            "unit": "ns",
-            "range": "± 0.31013498494559405"
-          }
-        ]
-      },
-      {
-        "commit": {
-          "author": {
-            "email": "15467143+TedHartMS@users.noreply.github.com",
-            "name": "Ted Hart",
-            "username": "TedHartMS"
-          },
-          "committer": {
-            "email": "noreply@github.com",
-            "name": "GitHub",
-            "username": "web-flow"
-          },
-          "distinct": true,
           "id": "ab4044fc82a7018d10befc34ae9aa4581b0a9490",
           "message": "Stop a dropped connection or an expired test certificate from wedging the test host (#2204)",
           "timestamp": "2026-10-06T14:48:46-07:00",
@@ -755303,6 +755159,150 @@ window.BENCHMARK_DATA = {
             "value": 281.5123269217355,
             "unit": "ns",
             "range": "± 0.8367777431081064"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "kmontrose@microsoft.com",
+            "name": "kevin-montrose",
+            "username": "kevin-montrose"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4e5bb967a6bae17b93d93495faeada9bef5db579",
+          "message": "Fixes `SMOVE` to match Redis behavior (#2304)\n\n* failing test for SMOVE into the same set\n\n* fix SMOVE to appropriately report success on same key moves, devolves to SISMEMBER in that case; reworks SISMEMBER to be zero alloc in that case\n\n* fix existing test\n\n* failing test for operations on an empty key set\n\n* remove a bunch of places where we incorrectly reject empty keys for set operations; addresses feedback",
+          "timestamp": "2026-10-27T18:19:57-04:00",
+          "tree_id": "e44332a0d2d3400122d4a74c8e76f4ded2f32d23",
+          "url": "https://github.com/microsoft/garnet/commit/4e5bb967a6bae17b93d93495faeada9bef5db579"
+        },
+        "date": 1793140160659,
+        "tool": "benchmarkdotnet",
+        "benches": [
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script1(Params: Managed,Limit)",
+            "value": 160.3402397121702,
+            "unit": "ns",
+            "range": "± 0.22656035144181774"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script2(Params: Managed,Limit)",
+            "value": 194.95218510287148,
+            "unit": "ns",
+            "range": "± 0.40783136097782174"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script3(Params: Managed,Limit)",
+            "value": 312.5109644669753,
+            "unit": "ns",
+            "range": "± 0.560558374006317"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script4(Params: Managed,Limit)",
+            "value": 355.59106544653577,
+            "unit": "ns",
+            "range": "± 1.2630011147250075"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script1(Params: Managed,None)",
+            "value": 159.10852893761225,
+            "unit": "ns",
+            "range": "± 0.25810274553858725"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script2(Params: Managed,None)",
+            "value": 201.4430933365455,
+            "unit": "ns",
+            "range": "± 0.45985066476166"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script3(Params: Managed,None)",
+            "value": 309.73920857111614,
+            "unit": "ns",
+            "range": "± 0.4413416073274702"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script4(Params: Managed,None)",
+            "value": 343.08259264628094,
+            "unit": "ns",
+            "range": "± 0.46956164743221585"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script1(Params: Native,None)",
+            "value": 146.53611413070135,
+            "unit": "ns",
+            "range": "± 0.37299053183950975"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script2(Params: Native,None)",
+            "value": 186.90854040781656,
+            "unit": "ns",
+            "range": "± 0.3928718282183906"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script3(Params: Native,None)",
+            "value": 316.30153160095216,
+            "unit": "ns",
+            "range": "± 0.7840301475084815"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script4(Params: Native,None)",
+            "value": 345.4575791358948,
+            "unit": "ns",
+            "range": "± 0.2919046940833425"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script1(Params: Tracked,Limit)",
+            "value": 149.91570815673242,
+            "unit": "ns",
+            "range": "± 0.1859740119145244"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script2(Params: Tracked,Limit)",
+            "value": 189.28832378754248,
+            "unit": "ns",
+            "range": "± 0.19850745037446066"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script3(Params: Tracked,Limit)",
+            "value": 310.2361528532846,
+            "unit": "ns",
+            "range": "± 0.7648038183805983"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script4(Params: Tracked,Limit)",
+            "value": 342.35692578095654,
+            "unit": "ns",
+            "range": "± 0.6560688722291582"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script1(Params: Tracked,None)",
+            "value": 149.99038904507955,
+            "unit": "ns",
+            "range": "± 0.0993765511609133"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script2(Params: Tracked,None)",
+            "value": 196.1773520367486,
+            "unit": "ns",
+            "range": "± 0.39094086119042465"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script3(Params: Tracked,None)",
+            "value": 312.79280240719135,
+            "unit": "ns",
+            "range": "± 0.2932213444631437"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaScripts.Script4(Params: Tracked,None)",
+            "value": 344.1503766133235,
+            "unit": "ns",
+            "range": "± 0.4482183902634669"
           }
         ]
       }
