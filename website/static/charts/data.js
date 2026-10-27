@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793125322116,
+  "lastUpdate": 1793125397730,
   "repoUrl": "https://github.com/microsoft/garnet",
   "entries": {
     "Benchmark": [],
@@ -836025,318 +836025,6 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "15467143+TedHartMS@users.noreply.github.com",
-            "name": "Ted Hart",
-            "username": "TedHartMS"
-          },
-          "committer": {
-            "email": "noreply@github.com",
-            "name": "GitHub",
-            "username": "web-flow"
-          },
-          "distinct": true,
-          "id": "fc97f951e82e6479bd61bddaa6e9de7f48b79647",
-          "message": "Allocate test ports dynamically from a non-ephemeral range (#2193)\n\n* Refuse a second bind on an occupied port on Windows, and add an avalanched hash\n\nOn Windows GarnetServerTcp set SO_REUSEADDR unconditionally, and cleared\nSO_REUSEPORT only on Linux, macOS, and FreeBSD. Windows SO_REUSEADDR is\npermissive: it lets a socket bind an address and port another socket already\nholds. Two live servers therefore both bound the same port and the OS split\nincoming connections between them, so a port conflict surfaced as plausible but\nwrong results rather than as a bind failure. Windows now sets\nSO_EXCLUSIVEADDRUSE, which refuses the second bind; the Unix paths are\nunchanged. GarnetServerTcpTests covered this but was skipped on Windows because\nthe behavior it asserts did not hold there. It now runs on every platform, and\nits TIME_WAIT rebind case confirms exclusive use does not block restarts.\n\nUtility.GetHashCodeWithMix applies a MurmurHash3 fmix64 finalizer to HashBytes.\nHashBytes is a multiply-accumulate, and multiplication propagates information\nonly toward higher bits, so its low bits carry almost no entropy: flipping one\ninput bit changes some output bits with probability 1.000 rather than 0.5. The\nfinalizer's right shifts move entropy back down, which makes it safe to reduce\nthe result modulo a power of two. UtilityTests asserts the avalanche property\ndirectly, since that, rather than the hash value, is why the method exists.\n\n* Allocate test ports dynamically from a non-ephemeral range\n\nTest ports were fixed per sub-project from a base of 33278, shifted by an\noptional GARNET_TEST_PORT_SLOT offset. That base predates the slot mechanism and\nsits inside Linux's default outbound-connection range (32768-60999,\nnet.ipv4.ip_local_port_range), so on Linux the kernel could assign a test's port\nto a connect() between the moment the port was observed free and the moment the\nserver bound it. Probing cannot close that window; only staying out of the range\ncan. The slot mechanism encoded 49152 as the ephemeral floor, which is the\nWindows and macOS value, so slot 7 looked like the boundary case while slot 0 was\nalready unsafe on Linux. Windows and macOS were never affected, which is why the\nflakes were Linux-only.\n\nPorts now come from [16384, 32768), below every supported platform's ephemeral\nrange and above the crowded region that holds both ports a developer is likely to\nbe running (6379, 5432, 11211, 8080) and ports this suite itself uses\n(10000-10002 Azurite). Each test host leases one aligned 32-port block, held by\nan exclusively locked file for the life of the process, which is what keeps\nconcurrent hosts apart; the OS releases the lock on exit, crash, or kill, so a\nblock frees itself. The lease is taken first and the ports probed second, because\nsoftware outside the suite, or a server stranded by a killed run, holds ports\nwhile holding no lease.\n\nBlocks are searched from a start derived from the checkout and the project name,\nso a project returns to the same ports run after run and netstat output stays\ninterpretable. On collision the search advances by a stride derived from the\nprocess, so two hosts that start at the same block diverge rather than walking in\nlockstep. The stride is forced odd and the block count is a power of two, which\ntogether make the walk visit every block exactly once: completing it proves no\nblock is free rather than exhausting a retry budget. The hash is\nUtility.GetHashCodeWithMix, because the index is cut from the low bits that\nHashBytes alone leaves unmixed.\n\nThis replaces slots entirely. Concurrency is no longer capped at seven\ncheckouts, GARNET_TEST_PORT_SLOT is gone and nothing needs setting, and\nTestPortAssignment, ClusterPortAssignment, and the band-width invariants they\nrequired are deleted - projects are identified by assembly name, so adding one\nneeds no central registration.\n\nSpecial cases, each commented where it lives:\n- Ports 30000-30999 are carved out for test/docker-tests/validate_docker_images.py,\n  which allocates from its own fixed base and can run alongside this suite.\n  TestPortAllocatorTests reads that base out of the Python file so moving either\n  side without the other fails as a test.\n- The probe binds the IPv4 and IPv6 wildcards separately and exclusively. One\n  dual-mode socket handles IPv4-mapped addresses differently per platform, and a\n  shared bind succeeds alongside a listener on a specific address under that\n  wildcard.\n- A failed probe deliberately ignores the socket error code: Windows reports\n  AccessDenied for ports excluded by Hyper-V, WSL, or Docker, not\n  AddressAlreadyInUse.\n- Cluster nodes keep contiguous ports because node n binds base + n; block\n  alignment keeps that run from straddling a boundary.\n- GARNET_TEST_PORT_BASE pins a base port for reproduction or a fixed firewall\n  opening. Pinned ports are still leased and probed.\n\nGarnetServerTcp.Start now reports the endpoint and the operating system's reason\nwhen a bind fails, which the raw SocketException names neither of.\nTestUtils.OnTearDown adds the allocation context, so a conflict reads as software\noutside the suite rather than as a defect in Garnet or in the test.\n\n* Drop stale port-slot instructions from the add-garnet-command skill\n\nThe skill still told readers to set GARNET_TEST_PORT_SLOT, which no longer\nexists; test hosts now claim their ports without configuration.\n\n* Cover the port allocator's failure paths\n\nReserve's error paths decide whether a run stops clearly or proceeds on ports it\ndoes not own, and none of them ran in an ordinary suite: a block another host\nholds, a pinned base port, and every block exhausted. A regression in any of\nthem would surface as the silent cross-checkout corruption the allocator exists\nto prevent.\n\nLeases in these tests are redirected to a private directory. Holding blocks in\nthe shared one would stop concurrent runs in other checkouts from starting,\nwhich is the very failure under test.\n\nWriting them found a real defect in the first draft: two tests took the same\nport from a deterministic helper, and because a reservation holds its lease for\nthe life of the process while binding nothing, the second saw ports that read as\nfree inside a block that was already leased. The helper now checks both, which\nis the same distinction the allocator draws.\n\nBuildPortConflictReport is split out of ReportPortConflictIfBindFailed so the\ndecision and the wording can be asserted without making a real test fail.\n\n* Name the alternate port explicitly in ConnectionLimitAcrossListenersTests\n\nThe fixture built its second listener from TestUtils.TestPort + 1. That is the\nport TestUtils.AlternateTestPort returns, and it is inside the block this test\nhost leases, so the behavior is unchanged - but the arithmetic only works\nbecause the reservation covers two ports, which the expression does not say.\nNaming the property states the dependency the fixture actually has.\n\n* Fix overlapping pinned reservations and misleading bind diagnostics\n\nReview of the allocator found four defects, all in paths that only run when\nsomething has already gone wrong.\n\nReservePinned leased only the block containing its first port. A pinned base is\ndeliberately not block-aligned, so a run can cross into the next block: base\n16415 with two ports leases block 0 while port 16416 sits unleased in block 1.\nAnother host could lease that block and be handed an overlapping run, both\nprobes passing because neither side had bound yet. Every intersected block is\nnow leased. IntersectedBlocks also skips ports outside the allocatable range,\nwhere PortBlock is not meaningful - it returned -480 for port 1024 and 738 for\nport 40000, neither of which names a block.\n\nThe teardown report fired for every bind failure but always diagnosed a port\nconflict. GarnetServerTcp also emits \"Could not bind\" for AccessDenied, which is\na platform-reserved range, and AddressNotAvailable, which is an address absent\nfrom the machine; neither is another process taking the port. The report now\nparses the socket error and stays silent unless it is AddressAlreadyInUse.\n\nThe report read the standalone port field, which ClusterTestContext.ReservePorts\nnever sets, so every cluster bind failure claimed the host had reserved no ports\nwhile it held an eight-port run. The allocator now records each reservation and\nthe report looks up the run covering the failing port, which also lets it name\nthe project that holds it.\n\nThe report asserted that a reserved port cannot have been taken by the OS. That\nis true only inside the allocatable range. GARNET_TEST_PORT_BASE can pin a run\nabove it, where the kernel really can assign the port to an outbound connection\nbetween the probe and the bind - the one collision pinning opts into. Pinned\nruns outside the range are now described as exactly that, and an endpoint the\ntest built itself is reported as carrying no allocator guarantee at all.\n\nEach fix is covered by a test verified by reverting the fix: restoring the\nsingle-block lease reports the tail of a straddling run as still available, and\nremoving the error-code gate reports an AccessDenied failure as software outside\nthe suite.",
-          "timestamp": "2026-10-02T19:54:35-07:00",
-          "tree_id": "388464bcc4b5c46e7530959b292c9aa3e9795782",
-          "url": "https://github.com/microsoft/garnet/commit/fc97f951e82e6479bd61bddaa6e9de7f48b79647"
-        },
-        "date": 1790997622763,
-        "tool": "benchmarkdotnet",
-        "benches": [
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringReadCommand(Params: AAD)",
-            "value": 20501.522318522137,
-            "unit": "ns",
-            "range": "± 124.95741634339342"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringRmwCommand(Params: AAD)",
-            "value": 27002.32195172991,
-            "unit": "ns",
-            "range": "± 111.71264519286284"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjRmwCommand(Params: AAD)",
-            "value": 27809.8148890904,
-            "unit": "ns",
-            "range": "± 201.4985159050075"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjReadCommand(Params: AAD)",
-            "value": 28471.432059151786,
-            "unit": "ns",
-            "range": "± 165.60222398736084"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpProc(Params: AAD)",
-            "value": 12429.273550851005,
-            "unit": "ns",
-            "range": "± 79.20692376704933"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpTxn(Params: AAD)",
-            "value": 23759.93875356821,
-            "unit": "ns",
-            "range": "± 149.8992627971128"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringReadCommand(Params: AAD)",
-            "value": 25061.725463867188,
-            "unit": "ns",
-            "range": "± 252.59640196021635"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringRmwCommand(Params: AAD)",
-            "value": 32423.653995289522,
-            "unit": "ns",
-            "range": "± 636.008677699882"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjRmwCommand(Params: AAD)",
-            "value": 31806.305401141828,
-            "unit": "ns",
-            "range": "± 136.3349815696936"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjReadCommand(Params: AAD)",
-            "value": 31659.1064453125,
-            "unit": "ns",
-            "range": "± 200.65850907816397"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpProc(Params: AAD)",
-            "value": 13663.064575195312,
-            "unit": "ns",
-            "range": "± 108.88213007316575"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpTxn(Params: AAD)",
-            "value": 27282.053702218192,
-            "unit": "ns",
-            "range": "± 128.5123189363503"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringReadCommand(Params: ACL)",
-            "value": 19944.896392822266,
-            "unit": "ns",
-            "range": "± 373.45880318878216"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringRmwCommand(Params: ACL)",
-            "value": 28209.51189753985,
-            "unit": "ns",
-            "range": "± 1811.3973608556469"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjRmwCommand(Params: ACL)",
-            "value": 27396.264241536457,
-            "unit": "ns",
-            "range": "± 318.0130003274541"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjReadCommand(Params: ACL)",
-            "value": 26203.00791422526,
-            "unit": "ns",
-            "range": "± 219.4877591397738"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpProc(Params: ACL)",
-            "value": 11925.801988081499,
-            "unit": "ns",
-            "range": "± 278.67693761810034"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpTxn(Params: ACL)",
-            "value": 23165.753072102863,
-            "unit": "ns",
-            "range": "± 262.712789489151"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringReadCommand(Params: ACL)",
-            "value": 24069.70723470052,
-            "unit": "ns",
-            "range": "± 323.4166257523775"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringRmwCommand(Params: ACL)",
-            "value": 31452.371826171875,
-            "unit": "ns",
-            "range": "± 310.28931894594626"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjRmwCommand(Params: ACL)",
-            "value": 32543.880353655135,
-            "unit": "ns",
-            "range": "± 229.0600597753112"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjReadCommand(Params: ACL)",
-            "value": 30422.41190592448,
-            "unit": "ns",
-            "range": "± 336.665468879973"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpProc(Params: ACL)",
-            "value": 13927.440819373498,
-            "unit": "ns",
-            "range": "± 129.37124007690085"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpTxn(Params: ACL)",
-            "value": 28993.368530273438,
-            "unit": "ns",
-            "range": "± 203.1253944868451"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringReadCommand(Params: AOF)",
-            "value": 20704.111099243164,
-            "unit": "ns",
-            "range": "± 618.4369403065408"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringRmwCommand(Params: AOF)",
-            "value": 36723.66015625,
-            "unit": "ns",
-            "range": "± 345.59844603602465"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjRmwCommand(Params: AOF)",
-            "value": 37124.28213266226,
-            "unit": "ns",
-            "range": "± 473.42309346628184"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjReadCommand(Params: AOF)",
-            "value": 25224.930623372395,
-            "unit": "ns",
-            "range": "± 176.5685049055956"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpProc(Params: AOF)",
-            "value": 11339.173316955566,
-            "unit": "ns",
-            "range": "± 220.52319495535676"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpTxn(Params: AOF)",
-            "value": 24915.719604492188,
-            "unit": "ns",
-            "range": "± 192.44191727251885"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringReadCommand(Params: AOF)",
-            "value": 24911.912536621094,
-            "unit": "ns",
-            "range": "± 529.9040626440109"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringRmwCommand(Params: AOF)",
-            "value": 44200.92116135817,
-            "unit": "ns",
-            "range": "± 285.52065353029747"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjRmwCommand(Params: AOF)",
-            "value": 46697.957356770836,
-            "unit": "ns",
-            "range": "± 1275.6991441652146"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjReadCommand(Params: AOF)",
-            "value": 30636.244405110676,
-            "unit": "ns",
-            "range": "± 376.5329064532417"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpProc(Params: AOF)",
-            "value": 13080.774211883545,
-            "unit": "ns",
-            "range": "± 254.621466428884"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpTxn(Params: AOF)",
-            "value": 29092.629718780518,
-            "unit": "ns",
-            "range": "± 891.4630326811275"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringReadCommand(Params: None)",
-            "value": 19963.495812049277,
-            "unit": "ns",
-            "range": "± 263.54779979167796"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringRmwCommand(Params: None)",
-            "value": 26501.07705252511,
-            "unit": "ns",
-            "range": "± 376.17214665256125"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjRmwCommand(Params: None)",
-            "value": 28998.448617117745,
-            "unit": "ns",
-            "range": "± 460.3651085806535"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjReadCommand(Params: None)",
-            "value": 27252.12422688802,
-            "unit": "ns",
-            "range": "± 321.6654595115903"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpProc(Params: None)",
-            "value": 11213.440140433933,
-            "unit": "ns",
-            "range": "± 279.4552319390477"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpTxn(Params: None)",
-            "value": 24179.64066725511,
-            "unit": "ns",
-            "range": "± 642.1526183390993"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringReadCommand(Params: None)",
-            "value": 26315.947875976562,
-            "unit": "ns",
-            "range": "± 476.44999667123494"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringRmwCommand(Params: None)",
-            "value": 33415.47648111979,
-            "unit": "ns",
-            "range": "± 1358.1482847664117"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjRmwCommand(Params: None)",
-            "value": 31158.247555003447,
-            "unit": "ns",
-            "range": "± 793.9338929757959"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjReadCommand(Params: None)",
-            "value": 31812.85578409831,
-            "unit": "ns",
-            "range": "± 769.4935118514583"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpProc(Params: None)",
-            "value": 13614.756774902344,
-            "unit": "ns",
-            "range": "± 233.22210875442588"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpTxn(Params: None)",
-            "value": 28634.90618537454,
-            "unit": "ns",
-            "range": "± 547.4799199100352"
-          }
-        ]
-      },
-      {
-        "commit": {
-          "author": {
             "email": "kmontrose@microsoft.com",
             "name": "kevin-montrose",
             "username": "kevin-montrose"
@@ -844707,6 +844395,174 @@ window.BENCHMARK_DATA = {
             "value": 22513.85498046875,
             "unit": "ns",
             "range": "± 176.9197855472445"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "96085550+vazois@users.noreply.github.com",
+            "name": "Vasileios Zois",
+            "username": "vazois"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9908e6c22bf758bbb289b078913a4c2a31f9a55c",
+          "message": "[Tsavorite] Validate migration and replication record layouts (#2267)\n\n* validate diskLogRecord payload bytes before allocations during serialization\n\n* Align overflow validation tests and documentation with component cleanup\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>\n\nCopilot-Session: 7e447cb0-c63c-4c78-bd34-bb7aac272245\n\n* validate upfront overflow bytes\n\n---------\n\nCopilot-Session: 7e447cb0-c63c-4c78-bd34-bb7aac272245",
+          "timestamp": "2026-10-27T11:10:34-07:00",
+          "tree_id": "7dd687556c839b0a97ab1357fea11af01f4524bb",
+          "url": "https://github.com/microsoft/garnet/commit/9908e6c22bf758bbb289b078913a4c2a31f9a55c"
+        },
+        "date": 1793125386605,
+        "tool": "benchmarkdotnet",
+        "benches": [
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringReadCommand(Params: AAD)",
+            "value": 10458.182525634766,
+            "unit": "ns",
+            "range": "± 231.89689797703105"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringRmwCommand(Params: AAD)",
+            "value": 12955.940573556083,
+            "unit": "ns",
+            "range": "± 158.8860261997007"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjRmwCommand(Params: AAD)",
+            "value": 14210.485331217447,
+            "unit": "ns",
+            "range": "± 216.3141626478494"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjReadCommand(Params: AAD)",
+            "value": 14397.915954589844,
+            "unit": "ns",
+            "range": "± 265.2082948944271"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpProc(Params: AAD)",
+            "value": 5572.470191217238,
+            "unit": "ns",
+            "range": "± 149.06668572910448"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpTxn(Params: AAD)",
+            "value": 11303.090013776507,
+            "unit": "ns",
+            "range": "± 200.07754324910627"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringReadCommand(Params: ACL)",
+            "value": 10620.617206280049,
+            "unit": "ns",
+            "range": "± 92.99945908552917"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringRmwCommand(Params: ACL)",
+            "value": 13321.83095296224,
+            "unit": "ns",
+            "range": "± 175.62118035937"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjRmwCommand(Params: ACL)",
+            "value": 14580.298258463541,
+            "unit": "ns",
+            "range": "± 192.3431208956597"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjReadCommand(Params: ACL)",
+            "value": 14225.444735013521,
+            "unit": "ns",
+            "range": "± 76.45114070998515"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpProc(Params: ACL)",
+            "value": 5827.911812918527,
+            "unit": "ns",
+            "range": "± 95.18301580934157"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpTxn(Params: ACL)",
+            "value": 11466.061299641928,
+            "unit": "ns",
+            "range": "± 157.27610036619308"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringReadCommand(Params: AOF)",
+            "value": 10761.422220865885,
+            "unit": "ns",
+            "range": "± 161.34977556910857"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringRmwCommand(Params: AOF)",
+            "value": 17630.501145582934,
+            "unit": "ns",
+            "range": "± 224.6015688104227"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjRmwCommand(Params: AOF)",
+            "value": 19645.42410714286,
+            "unit": "ns",
+            "range": "± 139.59944368192063"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjReadCommand(Params: AOF)",
+            "value": 14163.682149251303,
+            "unit": "ns",
+            "range": "± 242.6023968671531"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpProc(Params: AOF)",
+            "value": 5414.290350836676,
+            "unit": "ns",
+            "range": "± 167.54862081084525"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpTxn(Params: AOF)",
+            "value": 12383.754557291666,
+            "unit": "ns",
+            "range": "± 622.3309419231964"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringReadCommand(Params: None)",
+            "value": 10719.878169468471,
+            "unit": "ns",
+            "range": "± 169.13972206992807"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpRawStringRmwCommand(Params: None)",
+            "value": 13894.298095703125,
+            "unit": "ns",
+            "range": "± 259.6774025091191"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjRmwCommand(Params: None)",
+            "value": 14356.756474421574,
+            "unit": "ns",
+            "range": "± 137.489478348185"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpObjReadCommand(Params: None)",
+            "value": 13956.897176106771,
+            "unit": "ns",
+            "range": "± 246.72568351597545"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpProc(Params: None)",
+            "value": 5616.9297281901045,
+            "unit": "ns",
+            "range": "± 104.84023460358544"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ModuleOperations.ModuleNoOpTxn(Params: None)",
+            "value": 10983.114188058036,
+            "unit": "ns",
+            "range": "± 180.62758075954835"
           }
         ]
       }
