@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793139265086,
+  "lastUpdate": 1793139310873,
   "repoUrl": "https://github.com/microsoft/garnet",
   "entries": {
     "Benchmark": [],
@@ -926013,798 +926013,6 @@ window.BENCHMARK_DATA = {
             "username": "web-flow"
           },
           "distinct": true,
-          "id": "f7ddac6c78534c4296a945f141f561c95b8f63fb",
-          "message": "Validate argument count in SET-family string commands (#2050)\n\nSET, GETSET, SETEX/PSETEX, SETRANGE, APPEND and GETRANGE/SUBSTR only\nDebug.Assert(parseState.Count == N) their argument count (or consumed a\nmissing EX/PX option value) instead of validating it at runtime. Malformed\ninput such as 'SET k', 'SETEX k 10', 'SETRANGE k', 'APPEND k', 'GETRANGE k'\nor 'SET k v EX' therefore aborted the process via the assert in a Debug/CI\nbuild, and read an out-of-bounds parse-state slot in Release, instead of\nreturning an error - dropping the connection and every command pipelined\nafter it. GETWITHETAG and GETIFNOTMATCH in BasicEtagCommands.cs carry the\nsame bare assert and are covered here too, since every other handler in\nthat file already validates at runtime.\n\nValidate the argument count in each handler (and, for SET's EX/PX option,\nthat a value token follows before consuming it), matching what the\nobject-store handlers and NetworkSETWITHETAG already do. Well-formed\ncommands are unchanged; the wire errors match Redis.\n\nSET needs more than an arity check. It is declared with arity -3, but the\nfast parser only routes it to the option parser for array lengths 3..7, so\na longer option-bearing SET lands in NetworkSET - where \"not exactly 2\"\nis not a wrong-argument-count error. 'SET k v GET GET GET GET GET GET' is\naccepted by Redis, and 'SET k v GET GET GET GET GET GET GET EX 100' was\nsilently dropping its EX and replying +OK in Release. NetworkSET now hands\nanything longer than two arguments to NetworkSETEXNX, which already parses\nthe full option set correctly.\n\nCo-authored-by: kevin-montrose <kmontrose@microsoft.com>",
-          "timestamp": "2026-08-19T15:35:53-04:00",
-          "tree_id": "7e4052ba6253697afef1fe41e4541d913b5aea92",
-          "url": "https://github.com/microsoft/garnet/commit/f7ddac6c78534c4296a945f141f561c95b8f63fb"
-        },
-        "date": 1787171196768,
-        "tool": "benchmarkdotnet",
-        "benches": [
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddRem(Params: AAD)",
-            "value": 41678.15900530134,
-            "unit": "ns",
-            "range": "± 383.14819765211763"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddPopSingle(Params: AAD)",
-            "value": 65557.82859108665,
-            "unit": "ns",
-            "range": "± 1606.2329910365643"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SCard(Params: AAD)",
-            "value": 14284.915059407553,
-            "unit": "ns",
-            "range": "± 80.71500783594625"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMembers(Params: AAD)",
-            "value": 25076.795043945312,
-            "unit": "ns",
-            "range": "± 356.93078054356084"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMoveTwice(Params: AAD)",
-            "value": 108835.11962890625,
-            "unit": "ns",
-            "range": "± 3342.517310274245"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SIsMember(Params: AAD)",
-            "value": 26915.811564127605,
-            "unit": "ns",
-            "range": "± 437.35871414334366"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMIsMember(Params: AAD)",
-            "value": 31524.563060087316,
-            "unit": "ns",
-            "range": "± 403.79497377138586"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SRandMemberSingle(Params: AAD)",
-            "value": 32632.915198284645,
-            "unit": "ns",
-            "range": "± 811.6168129742675"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SScan(Params: AAD)",
-            "value": 33880.44708251953,
-            "unit": "ns",
-            "range": "± 752.7358900897759"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnion(Params: AAD)",
-            "value": 79112.90690104167,
-            "unit": "ns",
-            "range": "± 1089.7525940715132"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnionStore(Params: AAD)",
-            "value": 127159.91536458333,
-            "unit": "ns",
-            "range": "± 2308.175770312109"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInter(Params: AAD)",
-            "value": 72973.15521240234,
-            "unit": "ns",
-            "range": "± 1355.075241521812"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterStore(Params: AAD)",
-            "value": 119297.5439453125,
-            "unit": "ns",
-            "range": "± 2231.8509070126142"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterCard(Params: AAD)",
-            "value": 83644.77483575995,
-            "unit": "ns",
-            "range": "± 3136.2920316920104"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiff(Params: AAD)",
-            "value": 77978.2578901811,
-            "unit": "ns",
-            "range": "± 2889.4296493614706"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiffStore(Params: AAD)",
-            "value": 115110.58675130208,
-            "unit": "ns",
-            "range": "± 873.3613797812582"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddRem(Params: AAD)",
-            "value": 57175.696478949656,
-            "unit": "ns",
-            "range": "± 2405.4359861044422"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddPopSingle(Params: AAD)",
-            "value": 86751.59067007211,
-            "unit": "ns",
-            "range": "± 1239.9361919119542"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SCard(Params: AAD)",
-            "value": 21101.479085286457,
-            "unit": "ns",
-            "range": "± 331.06734312647393"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMembers(Params: AAD)",
-            "value": 29909.157427619484,
-            "unit": "ns",
-            "range": "± 574.8751891499353"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMoveTwice(Params: AAD)",
-            "value": 132885.78055245537,
-            "unit": "ns",
-            "range": "± 1072.9923945448331"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SIsMember(Params: AAD)",
-            "value": 31070.55549621582,
-            "unit": "ns",
-            "range": "± 582.9478730304687"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMIsMember(Params: AAD)",
-            "value": 35823.53068033854,
-            "unit": "ns",
-            "range": "± 618.3390456724079"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SRandMemberSingle(Params: AAD)",
-            "value": 36764.52918419471,
-            "unit": "ns",
-            "range": "± 465.71303638919323"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SScan(Params: AAD)",
-            "value": 38487.399582635786,
-            "unit": "ns",
-            "range": "± 878.1853736656723"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnion(Params: AAD)",
-            "value": 95577.666015625,
-            "unit": "ns",
-            "range": "± 574.040437744321"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnionStore(Params: AAD)",
-            "value": 143057.35026041666,
-            "unit": "ns",
-            "range": "± 898.8920893954947"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInter(Params: AAD)",
-            "value": 86867.43570963542,
-            "unit": "ns",
-            "range": "± 670.3700020253821"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterStore(Params: AAD)",
-            "value": 132187.15169270834,
-            "unit": "ns",
-            "range": "± 450.08939869883636"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterCard(Params: AAD)",
-            "value": 86963.63932291667,
-            "unit": "ns",
-            "range": "± 892.7336693242045"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiff(Params: AAD)",
-            "value": 88009.38557942708,
-            "unit": "ns",
-            "range": "± 715.420683559673"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiffStore(Params: AAD)",
-            "value": 127934.32779947917,
-            "unit": "ns",
-            "range": "± 961.259371163623"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddRem(Params: ACL)",
-            "value": 43503.92618815104,
-            "unit": "ns",
-            "range": "± 346.3048397717125"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddPopSingle(Params: ACL)",
-            "value": 62821.580287388395,
-            "unit": "ns",
-            "range": "± 406.93425475964034"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SCard(Params: ACL)",
-            "value": 2998.3989588419595,
-            "unit": "ns",
-            "range": "± 24.2946242321766"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMembers(Params: ACL)",
-            "value": 6498.658207484654,
-            "unit": "ns",
-            "range": "± 36.46153106564627"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMoveTwice(Params: ACL)",
-            "value": 8717.279404860277,
-            "unit": "ns",
-            "range": "± 48.87246334194178"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SIsMember(Params: ACL)",
-            "value": 7847.704206194197,
-            "unit": "ns",
-            "range": "± 86.86261144745585"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMIsMember(Params: ACL)",
-            "value": 8368.80622276893,
-            "unit": "ns",
-            "range": "± 72.81050481986168"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SRandMemberSingle(Params: ACL)",
-            "value": 7261.950302124023,
-            "unit": "ns",
-            "range": "± 58.37971257078781"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SScan(Params: ACL)",
-            "value": 3740.5328369140625,
-            "unit": "ns",
-            "range": "± 23.694749592781996"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnion(Params: ACL)",
-            "value": 3707.50607808431,
-            "unit": "ns",
-            "range": "± 25.91317214554063"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnionStore(Params: ACL)",
-            "value": 8398.888506208148,
-            "unit": "ns",
-            "range": "± 85.77365977908848"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInter(Params: ACL)",
-            "value": 3721.155313345102,
-            "unit": "ns",
-            "range": "± 14.33336911087636"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterStore(Params: ACL)",
-            "value": 8421.208190917969,
-            "unit": "ns",
-            "range": "± 97.45111528056931"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterCard(Params: ACL)",
-            "value": 8641.05478922526,
-            "unit": "ns",
-            "range": "± 109.44747332635175"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiff(Params: ACL)",
-            "value": 3705.09706224714,
-            "unit": "ns",
-            "range": "± 17.432306314750846"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiffStore(Params: ACL)",
-            "value": 8256.509726388114,
-            "unit": "ns",
-            "range": "± 63.134595814627424"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddRem(Params: ACL)",
-            "value": 53076.60847981771,
-            "unit": "ns",
-            "range": "± 478.5737675849932"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddPopSingle(Params: ACL)",
-            "value": 83278.40576171875,
-            "unit": "ns",
-            "range": "± 302.1940696772333"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SCard(Params: ACL)",
-            "value": 3432.709197998047,
-            "unit": "ns",
-            "range": "± 29.2681604039832"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMembers(Params: ACL)",
-            "value": 6838.324839274089,
-            "unit": "ns",
-            "range": "± 44.68501000296228"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMoveTwice(Params: ACL)",
-            "value": 9314.292297363281,
-            "unit": "ns",
-            "range": "± 119.02094705964895"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SIsMember(Params: ACL)",
-            "value": 9029.97327532087,
-            "unit": "ns",
-            "range": "± 73.62546853366302"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMIsMember(Params: ACL)",
-            "value": 10503.556315104166,
-            "unit": "ns",
-            "range": "± 121.29191387435033"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SRandMemberSingle(Params: ACL)",
-            "value": 8284.994099934896,
-            "unit": "ns",
-            "range": "± 144.21581594879714"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SScan(Params: ACL)",
-            "value": 4075.079563685826,
-            "unit": "ns",
-            "range": "± 36.49934852248812"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnion(Params: ACL)",
-            "value": 4109.241129557292,
-            "unit": "ns",
-            "range": "± 30.22286933955648"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnionStore(Params: ACL)",
-            "value": 10774.689127604166,
-            "unit": "ns",
-            "range": "± 77.63076951252512"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInter(Params: ACL)",
-            "value": 4209.599794660296,
-            "unit": "ns",
-            "range": "± 26.35278292117098"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterStore(Params: ACL)",
-            "value": 10735.010964529854,
-            "unit": "ns",
-            "range": "± 72.2522963883294"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterCard(Params: ACL)",
-            "value": 10242.391459147135,
-            "unit": "ns",
-            "range": "± 71.09024099560598"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiff(Params: ACL)",
-            "value": 4095.5309041341147,
-            "unit": "ns",
-            "range": "± 39.98056464579535"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiffStore(Params: ACL)",
-            "value": 10355.624593098959,
-            "unit": "ns",
-            "range": "± 81.12667692480593"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddRem(Params: AOF)",
-            "value": 64471.743977864586,
-            "unit": "ns",
-            "range": "± 797.5906057164053"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddPopSingle(Params: AOF)",
-            "value": 83114.71761067708,
-            "unit": "ns",
-            "range": "± 748.5896411641984"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SCard(Params: AOF)",
-            "value": 14325.27109781901,
-            "unit": "ns",
-            "range": "± 99.43907776028092"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMembers(Params: AOF)",
-            "value": 24168.802388509113,
-            "unit": "ns",
-            "range": "± 180.39697576641612"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMoveTwice(Params: AOF)",
-            "value": 138544.5277622768,
-            "unit": "ns",
-            "range": "± 1267.7761810468394"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SIsMember(Params: AOF)",
-            "value": 25941.243591308594,
-            "unit": "ns",
-            "range": "± 137.83608463405153"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMIsMember(Params: AOF)",
-            "value": 30946.23064313616,
-            "unit": "ns",
-            "range": "± 146.15879040412972"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SRandMemberSingle(Params: AOF)",
-            "value": 29757.479756673176,
-            "unit": "ns",
-            "range": "± 175.2860172632479"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SScan(Params: AOF)",
-            "value": 33202.50732421875,
-            "unit": "ns",
-            "range": "± 265.6180531150339"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnion(Params: AOF)",
-            "value": 78587.31407752403,
-            "unit": "ns",
-            "range": "± 436.01995686289916"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnionStore(Params: AOF)",
-            "value": 180792.45279947916,
-            "unit": "ns",
-            "range": "± 1188.9936669574527"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInter(Params: AOF)",
-            "value": 71028.44075520833,
-            "unit": "ns",
-            "range": "± 457.2617523127936"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterStore(Params: AOF)",
-            "value": 166747.06217447916,
-            "unit": "ns",
-            "range": "± 1261.9689590283876"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterCard(Params: AOF)",
-            "value": 78943.15511067708,
-            "unit": "ns",
-            "range": "± 678.3395501179724"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiff(Params: AOF)",
-            "value": 71271.77652994792,
-            "unit": "ns",
-            "range": "± 546.0945033781519"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiffStore(Params: AOF)",
-            "value": 156305.34144810267,
-            "unit": "ns",
-            "range": "± 965.8699575429118"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddRem(Params: AOF)",
-            "value": 76011.28255208333,
-            "unit": "ns",
-            "range": "± 705.993870955345"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddPopSingle(Params: AOF)",
-            "value": 113034.7412109375,
-            "unit": "ns",
-            "range": "± 651.7771596862563"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SCard(Params: AOF)",
-            "value": 17519.681440080916,
-            "unit": "ns",
-            "range": "± 83.23231650449166"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMembers(Params: AOF)",
-            "value": 28464.252319335938,
-            "unit": "ns",
-            "range": "± 179.09263108984618"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMoveTwice(Params: AOF)",
-            "value": 161625.7511393229,
-            "unit": "ns",
-            "range": "± 901.6549411984932"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SIsMember(Params: AOF)",
-            "value": 29538.208225795202,
-            "unit": "ns",
-            "range": "± 161.7645607645188"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMIsMember(Params: AOF)",
-            "value": 34102.71512545072,
-            "unit": "ns",
-            "range": "± 122.97433558840399"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SRandMemberSingle(Params: AOF)",
-            "value": 34209.84130859375,
-            "unit": "ns",
-            "range": "± 97.33507646723501"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SScan(Params: AOF)",
-            "value": 37263.8623046875,
-            "unit": "ns",
-            "range": "± 326.62016940682025"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnion(Params: AOF)",
-            "value": 89786.80245535714,
-            "unit": "ns",
-            "range": "± 456.0702803500085"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnionStore(Params: AOF)",
-            "value": 196746.1879185268,
-            "unit": "ns",
-            "range": "± 1248.480436103556"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInter(Params: AOF)",
-            "value": 80431.21056189903,
-            "unit": "ns",
-            "range": "± 421.2069841947722"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterStore(Params: AOF)",
-            "value": 184323.86067708334,
-            "unit": "ns",
-            "range": "± 1028.248659924813"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterCard(Params: AOF)",
-            "value": 92365.9521484375,
-            "unit": "ns",
-            "range": "± 616.0737694558595"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiff(Params: AOF)",
-            "value": 83037.2541155134,
-            "unit": "ns",
-            "range": "± 729.8835483151979"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiffStore(Params: AOF)",
-            "value": 203762.72135416666,
-            "unit": "ns",
-            "range": "± 933.979582443685"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddRem(Params: None)",
-            "value": 43830.846354166664,
-            "unit": "ns",
-            "range": "± 323.7298796197065"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddPopSingle(Params: None)",
-            "value": 61229.693196614586,
-            "unit": "ns",
-            "range": "± 468.64185829383746"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SCard(Params: None)",
-            "value": 13219.001159667969,
-            "unit": "ns",
-            "range": "± 68.11671592050459"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMembers(Params: None)",
-            "value": 24008.0366007487,
-            "unit": "ns",
-            "range": "± 139.31865302479167"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMoveTwice(Params: None)",
-            "value": 103376.98160807292,
-            "unit": "ns",
-            "range": "± 746.6577062990481"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SIsMember(Params: None)",
-            "value": 25504.862874348957,
-            "unit": "ns",
-            "range": "± 146.64007289630456"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMIsMember(Params: None)",
-            "value": 30735.05859375,
-            "unit": "ns",
-            "range": "± 186.4523804214266"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SRandMemberSingle(Params: None)",
-            "value": 31980.071149553572,
-            "unit": "ns",
-            "range": "± 177.7182235635537"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SScan(Params: None)",
-            "value": 33736.581217447914,
-            "unit": "ns",
-            "range": "± 404.26392541983535"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnion(Params: None)",
-            "value": 78604.89595853366,
-            "unit": "ns",
-            "range": "± 338.9357630085588"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnionStore(Params: None)",
-            "value": 136730.24076021634,
-            "unit": "ns",
-            "range": "± 6320.86473343954"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInter(Params: None)",
-            "value": 73397.71240234375,
-            "unit": "ns",
-            "range": "± 1784.5931370080525"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterStore(Params: None)",
-            "value": 109450.7666015625,
-            "unit": "ns",
-            "range": "± 1003.3740887872245"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterCard(Params: None)",
-            "value": 75375.05540114183,
-            "unit": "ns",
-            "range": "± 936.8763037857561"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiff(Params: None)",
-            "value": 73449.20979817708,
-            "unit": "ns",
-            "range": "± 572.3825758985454"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiffStore(Params: None)",
-            "value": 115901.50146484375,
-            "unit": "ns",
-            "range": "± 447.44881622267843"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddRem(Params: None)",
-            "value": 52993.98780235877,
-            "unit": "ns",
-            "range": "± 321.8301479832628"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SAddPopSingle(Params: None)",
-            "value": 82404.74504743304,
-            "unit": "ns",
-            "range": "± 635.2120365218045"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SCard(Params: None)",
-            "value": 17949.336360051082,
-            "unit": "ns",
-            "range": "± 111.00972827637803"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMembers(Params: None)",
-            "value": 27240.342407226562,
-            "unit": "ns",
-            "range": "± 199.66604391714458"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMoveTwice(Params: None)",
-            "value": 126697.79256184895,
-            "unit": "ns",
-            "range": "± 250.36129495436808"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SIsMember(Params: None)",
-            "value": 28790.332438151043,
-            "unit": "ns",
-            "range": "± 180.97630062807522"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SMIsMember(Params: None)",
-            "value": 34313.91805013021,
-            "unit": "ns",
-            "range": "± 321.8000243456465"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SRandMemberSingle(Params: None)",
-            "value": 35580.540771484375,
-            "unit": "ns",
-            "range": "± 204.72678771799306"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SScan(Params: None)",
-            "value": 36251.64347330729,
-            "unit": "ns",
-            "range": "± 279.67634428510183"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnion(Params: None)",
-            "value": 90018.32101004464,
-            "unit": "ns",
-            "range": "± 382.09612697724305"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SUnionStore(Params: None)",
-            "value": 136251.77734375,
-            "unit": "ns",
-            "range": "± 915.3248297318556"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInter(Params: None)",
-            "value": 83117.5066266741,
-            "unit": "ns",
-            "range": "± 385.4017168864977"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterStore(Params: None)",
-            "value": 126061.0107421875,
-            "unit": "ns",
-            "range": "± 1045.0900890063378"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SInterCard(Params: None)",
-            "value": 91559.14481026786,
-            "unit": "ns",
-            "range": "± 488.24589008195295"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiff(Params: None)",
-            "value": 83967.61149088542,
-            "unit": "ns",
-            "range": "± 614.3974065607755"
-          },
-          {
-            "name": "BDN.benchmark.Operations.SetOperations.SDiffStore(Params: None)",
-            "value": 129723.03292410714,
-            "unit": "ns",
-            "range": "± 604.06078384864"
-          }
-        ]
-      },
-      {
-        "commit": {
-          "author": {
-            "email": "w741069229@gmail.com",
-            "name": "hexonal",
-            "username": "hexonal"
-          },
-          "committer": {
-            "email": "noreply@github.com",
-            "name": "GitHub",
-            "username": "web-flow"
-          },
-          "distinct": true,
           "id": "07b4504d15008cb2b857e549aafd137d9a95c523",
           "message": "Fix ZRANGESTORE aborting the RESP session on invalid range parameters (#2040)\n\nZRANGESTORE with LIMIT in index mode, or with a non-float min/max, made\nSortedSetRangeStore parse the range operation's RESP error output as an\narray length. That threw a RESP parsing exception which aborted the\nconnection (dropping every pipelined command after it), and because\nDelete(dstKey) ran before the throwing parse, a rejected ZRANGESTORE also\ndestroyed a pre-existing destination key.\n\nSortedSetRange now flags the five paths on which it writes a RESP error\ninstead of a range by setting ObjectOutput.result1 negative, so\nSortedSetRangeStore can tell an error apart from a result without\ninspecting the payload. On that flag it writes the error straight through\nto the client and leaves the destination key alone, matching what\nGEOSEARCHSTORE already does in SortedSetGeoOps - which is also why\nSortedSetRangeStore now returns its reply through a SpanByteAndMemory,\nlike GeoSearchStore, rather than through an out parameter per reply kind.\n\nBYSCORE and BYLEX are independent options rather than mutually exclusive\nones, so the BYLEX error is the one error path reachable after a reply has\nalready been written: \"ZRANGE key 1 3 BYSCORE BYLEX\" runs the BYSCORE\nblock first and leaves an array in the buffer. Rewind the writer there so\nthe output holds the error alone. Without that, one command answers with\ntwo RESP payloads - an array followed by an error - which desynchronises\nthe stream for every command after it.\n\nCo-authored-by: kevin-montrose <kmontrose@microsoft.com>",
           "timestamp": "2026-08-19T16:21:46-04:00",
@@ -947933,6 +947141,414 @@ window.BENCHMARK_DATA = {
             "value": 115614.0205891927,
             "unit": "ns",
             "range": "± 1493.6274538906562"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "badrishc@microsoft.com",
+            "name": "Badrish Chandramouli",
+            "username": "badrishc"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "df36a8553e2c10aaf97e3f1d8f51052a891eafc3",
+          "message": "Do not block in blocking commands run by EXEC or a script (#2285)\n\nA blocking list or sorted-set command run by EXEC on an empty key waited\nfor an item while the transaction held the key's exclusive lock. No client\ncould push to the key, so the connection hung, along with every other\nclient writing that key.\n\nSessions running a transaction or a script now serve these commands\nwithout waiting: they return an available item or reply as on timeout.\n\nA push run by EXEC also no longer waits for the item broker when notifying\nwaiters, since the broker may be waiting for a key lock the transaction\nholds.\n\nFixes #2266\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+          "timestamp": "2026-10-27T14:48:08-07:00",
+          "tree_id": "fceecfaed06ea6a1958da3b3e38c9950763b98f0",
+          "url": "https://github.com/microsoft/garnet/commit/df36a8553e2c10aaf97e3f1d8f51052a891eafc3"
+        },
+        "date": 1793139287409,
+        "tool": "benchmarkdotnet",
+        "benches": [
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SAddRem(Params: AAD)",
+            "value": 47189.3071101262,
+            "unit": "ns",
+            "range": "± 295.73475212586766"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SAddPopSingle(Params: AAD)",
+            "value": 65984.88348599138,
+            "unit": "ns",
+            "range": "± 1894.7735301041703"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SCard(Params: AAD)",
+            "value": 14160.637882777623,
+            "unit": "ns",
+            "range": "± 96.94687640720227"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SMembers(Params: AAD)",
+            "value": 24054.840959821428,
+            "unit": "ns",
+            "range": "± 116.37140157269971"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SMoveTwice(Params: AAD)",
+            "value": 175639.48692908653,
+            "unit": "ns",
+            "range": "± 882.9945555772858"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SIsMember(Params: AAD)",
+            "value": 26897.34919621394,
+            "unit": "ns",
+            "range": "± 127.13805876045254"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SMIsMember(Params: AAD)",
+            "value": 32189.41141764323,
+            "unit": "ns",
+            "range": "± 316.1035326253022"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SRandMemberSingle(Params: AAD)",
+            "value": 29795.428670247395,
+            "unit": "ns",
+            "range": "± 276.01008102833475"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SScan(Params: AAD)",
+            "value": 33301.79443359375,
+            "unit": "ns",
+            "range": "± 266.7600630553596"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SUnion(Params: AAD)",
+            "value": 80859.65657552083,
+            "unit": "ns",
+            "range": "± 650.231250061756"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SUnionStore(Params: AAD)",
+            "value": 118368.52504185268,
+            "unit": "ns",
+            "range": "± 808.696504692031"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SInter(Params: AAD)",
+            "value": 69785.36812918527,
+            "unit": "ns",
+            "range": "± 530.0090683099153"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SInterStore(Params: AAD)",
+            "value": 112282.65299479167,
+            "unit": "ns",
+            "range": "± 1187.4117754888207"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SInterCard(Params: AAD)",
+            "value": 81799.06168619792,
+            "unit": "ns",
+            "range": "± 735.8012941972413"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SDiff(Params: AAD)",
+            "value": 74562.62919108073,
+            "unit": "ns",
+            "range": "± 2458.2056816908116"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SDiffStore(Params: AAD)",
+            "value": 121955.31372070312,
+            "unit": "ns",
+            "range": "± 9220.687992120938"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SAddRem(Params: ACL)",
+            "value": 44309.183611188615,
+            "unit": "ns",
+            "range": "± 335.5787374896545"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SAddPopSingle(Params: ACL)",
+            "value": 67065.10172526042,
+            "unit": "ns",
+            "range": "± 575.3894918526374"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SCard(Params: ACL)",
+            "value": 3051.9198608398438,
+            "unit": "ns",
+            "range": "± 16.442230849520495"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SMembers(Params: ACL)",
+            "value": 6100.314076741536,
+            "unit": "ns",
+            "range": "± 41.50751590225278"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SMoveTwice(Params: ACL)",
+            "value": 9235.270581926618,
+            "unit": "ns",
+            "range": "± 52.22926201037658"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SIsMember(Params: ACL)",
+            "value": 8118.746185302734,
+            "unit": "ns",
+            "range": "± 43.742045940792565"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SMIsMember(Params: ACL)",
+            "value": 8666.385357196514,
+            "unit": "ns",
+            "range": "± 37.58347359070333"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SRandMemberSingle(Params: ACL)",
+            "value": 7342.0183999197825,
+            "unit": "ns",
+            "range": "± 57.61445434120561"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SScan(Params: ACL)",
+            "value": 3859.0808232625327,
+            "unit": "ns",
+            "range": "± 9.154973293692354"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SUnion(Params: ACL)",
+            "value": 3863.1261825561523,
+            "unit": "ns",
+            "range": "± 39.25977089658112"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SUnionStore(Params: ACL)",
+            "value": 9074.97812906901,
+            "unit": "ns",
+            "range": "± 109.86401648300635"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SInter(Params: ACL)",
+            "value": 3857.1734873453775,
+            "unit": "ns",
+            "range": "± 42.99041826920039"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SInterStore(Params: ACL)",
+            "value": 8955.968802315849,
+            "unit": "ns",
+            "range": "± 52.3628900084884"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SInterCard(Params: ACL)",
+            "value": 8813.117980957031,
+            "unit": "ns",
+            "range": "± 106.53501983114771"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SDiff(Params: ACL)",
+            "value": 3859.4824727376304,
+            "unit": "ns",
+            "range": "± 33.540805609842494"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SDiffStore(Params: ACL)",
+            "value": 8846.041107177734,
+            "unit": "ns",
+            "range": "± 70.72968342282097"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SAddRem(Params: AOF)",
+            "value": 65828.81905691964,
+            "unit": "ns",
+            "range": "± 427.49734128934006"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SAddPopSingle(Params: AOF)",
+            "value": 87999.18588491586,
+            "unit": "ns",
+            "range": "± 522.4409612095117"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SCard(Params: AOF)",
+            "value": 13933.125741141183,
+            "unit": "ns",
+            "range": "± 52.27929112470764"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SMembers(Params: AOF)",
+            "value": 25000.345938546317,
+            "unit": "ns",
+            "range": "± 116.44017738531656"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SMoveTwice(Params: AOF)",
+            "value": 255778.43424479166,
+            "unit": "ns",
+            "range": "± 1239.400702054805"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SIsMember(Params: AOF)",
+            "value": 25967.206013997395,
+            "unit": "ns",
+            "range": "± 106.01283299474655"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SMIsMember(Params: AOF)",
+            "value": 29942.949500450723,
+            "unit": "ns",
+            "range": "± 136.9231091226939"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SRandMemberSingle(Params: AOF)",
+            "value": 28893.9207810622,
+            "unit": "ns",
+            "range": "± 130.48262076025668"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SScan(Params: AOF)",
+            "value": 32972.05434945913,
+            "unit": "ns",
+            "range": "± 112.95024248932828"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SUnion(Params: AOF)",
+            "value": 76829.20880998884,
+            "unit": "ns",
+            "range": "± 706.7080242305153"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SUnionStore(Params: AOF)",
+            "value": 200516.84407552084,
+            "unit": "ns",
+            "range": "± 1134.747021035727"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SInter(Params: AOF)",
+            "value": 74019.52689034598,
+            "unit": "ns",
+            "range": "± 596.1475846783848"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SInterStore(Params: AOF)",
+            "value": 177107.92759486608,
+            "unit": "ns",
+            "range": "± 2078.3587745868126"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SInterCard(Params: AOF)",
+            "value": 76272.32828776042,
+            "unit": "ns",
+            "range": "± 469.00945639701735"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SDiff(Params: AOF)",
+            "value": 71200.40283203125,
+            "unit": "ns",
+            "range": "± 989.035794046723"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SDiffStore(Params: AOF)",
+            "value": 186359.2494419643,
+            "unit": "ns",
+            "range": "± 1072.88544685972"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SAddRem(Params: None)",
+            "value": 44274.0576171875,
+            "unit": "ns",
+            "range": "± 482.67272309905434"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SAddPopSingle(Params: None)",
+            "value": 65410.101725260414,
+            "unit": "ns",
+            "range": "± 595.6394110001645"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SCard(Params: None)",
+            "value": 13580.824228922525,
+            "unit": "ns",
+            "range": "± 89.50909637949214"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SMembers(Params: None)",
+            "value": 24961.151559012276,
+            "unit": "ns",
+            "range": "± 70.97148164776824"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SMoveTwice(Params: None)",
+            "value": 182107.93282645088,
+            "unit": "ns",
+            "range": "± 1221.1712353455305"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SIsMember(Params: None)",
+            "value": 25657.069295247395,
+            "unit": "ns",
+            "range": "± 260.6035431291008"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SMIsMember(Params: None)",
+            "value": 30250.535583496094,
+            "unit": "ns",
+            "range": "± 98.14541480721083"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SRandMemberSingle(Params: None)",
+            "value": 29993.019612630207,
+            "unit": "ns",
+            "range": "± 153.73934926490838"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SScan(Params: None)",
+            "value": 33531.612287248885,
+            "unit": "ns",
+            "range": "± 256.8561653725698"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SUnion(Params: None)",
+            "value": 79616.279296875,
+            "unit": "ns",
+            "range": "± 770.5112428576713"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SUnionStore(Params: None)",
+            "value": 122903.93391927083,
+            "unit": "ns",
+            "range": "± 1451.2537656470547"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SInter(Params: None)",
+            "value": 71039.0360514323,
+            "unit": "ns",
+            "range": "± 455.6238681617935"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SInterStore(Params: None)",
+            "value": 113604.61861746652,
+            "unit": "ns",
+            "range": "± 658.5925957146743"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SInterCard(Params: None)",
+            "value": 77714.38598632812,
+            "unit": "ns",
+            "range": "± 630.9612343063538"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SDiff(Params: None)",
+            "value": 71551.71743539664,
+            "unit": "ns",
+            "range": "± 247.5245952840504"
+          },
+          {
+            "name": "BDN.benchmark.Operations.SetOperations.SDiffStore(Params: None)",
+            "value": 119658.04094587054,
+            "unit": "ns",
+            "range": "± 510.0726116117231"
           }
         ]
       }
