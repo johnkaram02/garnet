@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793137950602,
+  "lastUpdate": 1793137960928,
   "repoUrl": "https://github.com/microsoft/garnet",
   "entries": {
     "Benchmark": [],
@@ -778131,78 +778131,6 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "kmontrose@microsoft.com",
-            "name": "kevin-montrose",
-            "username": "kevin-montrose"
-          },
-          "committer": {
-            "email": "noreply@github.com",
-            "name": "GitHub",
-            "username": "web-flow"
-          },
-          "distinct": true,
-          "id": "c9e9306e55e2060686a9f2502fb091e97d62005b",
-          "message": "Update testcerts (#2202)",
-          "timestamp": "2026-10-05T18:30:31-07:00",
-          "tree_id": "9fb39923536bb5ed768c4beac5e50c368e4cb774",
-          "url": "https://github.com/microsoft/garnet/commit/c9e9306e55e2060686a9f2502fb091e97d62005b"
-        },
-        "date": 1791250614290,
-        "tool": "benchmarkdotnet",
-        "benches": [
-          {
-            "name": "BDN.benchmark.Cluster.ClusterMigrate.Get(Params: None)",
-            "value": 31983.06925746373,
-            "unit": "ns",
-            "range": "± 25.09789784476085"
-          },
-          {
-            "name": "BDN.benchmark.Cluster.ClusterMigrate.Set(Params: None)",
-            "value": 30538.38153076172,
-            "unit": "ns",
-            "range": "± 70.21840928529139"
-          },
-          {
-            "name": "BDN.benchmark.Cluster.ClusterMigrate.MGet(Params: None)",
-            "value": 27324.363025371844,
-            "unit": "ns",
-            "range": "± 37.86345436667288"
-          },
-          {
-            "name": "BDN.benchmark.Cluster.ClusterMigrate.MSet(Params: None)",
-            "value": 24856.535897827147,
-            "unit": "ns",
-            "range": "± 21.082890370573086"
-          },
-          {
-            "name": "BDN.benchmark.Cluster.ClusterMigrate.Get(Params: None)",
-            "value": 46755.36029287485,
-            "unit": "ns",
-            "range": "± 113.25827644772862"
-          },
-          {
-            "name": "BDN.benchmark.Cluster.ClusterMigrate.Set(Params: None)",
-            "value": 51950.53269136869,
-            "unit": "ns",
-            "range": "± 60.7851685730904"
-          },
-          {
-            "name": "BDN.benchmark.Cluster.ClusterMigrate.MGet(Params: None)",
-            "value": 38518.70521240235,
-            "unit": "ns",
-            "range": "± 95.45013383399552"
-          },
-          {
-            "name": "BDN.benchmark.Cluster.ClusterMigrate.MSet(Params: None)",
-            "value": 29606.750939002402,
-            "unit": "ns",
-            "range": "± 46.14822761159959"
-          }
-        ]
-      },
-      {
-        "commit": {
-          "author": {
             "email": "15467143+TedHartMS@users.noreply.github.com",
             "name": "Ted Hart",
             "username": "TedHartMS"
@@ -780549,6 +780477,54 @@ window.BENCHMARK_DATA = {
             "value": 22816.44446004232,
             "unit": "ns",
             "range": "± 23.89892599228634"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "badrishc@microsoft.com",
+            "name": "Badrish Chandramouli",
+            "username": "badrishc"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "df36a8553e2c10aaf97e3f1d8f51052a891eafc3",
+          "message": "Do not block in blocking commands run by EXEC or a script (#2285)\n\nA blocking list or sorted-set command run by EXEC on an empty key waited\nfor an item while the transaction held the key's exclusive lock. No client\ncould push to the key, so the connection hung, along with every other\nclient writing that key.\n\nSessions running a transaction or a script now serve these commands\nwithout waiting: they return an available item or reply as on timeout.\n\nA push run by EXEC also no longer waits for the item broker when notifying\nwaiters, since the broker may be waiting for a key lock the transaction\nholds.\n\nFixes #2266\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+          "timestamp": "2026-10-27T14:48:08-07:00",
+          "tree_id": "fceecfaed06ea6a1958da3b3e38c9950763b98f0",
+          "url": "https://github.com/microsoft/garnet/commit/df36a8553e2c10aaf97e3f1d8f51052a891eafc3"
+        },
+        "date": 1793137939520,
+        "tool": "benchmarkdotnet",
+        "benches": [
+          {
+            "name": "BDN.benchmark.Cluster.ClusterMigrate.Get(Params: None)",
+            "value": 29722.614641462053,
+            "unit": "ns",
+            "range": "± 45.185584944331694"
+          },
+          {
+            "name": "BDN.benchmark.Cluster.ClusterMigrate.Set(Params: None)",
+            "value": 31280.249424235026,
+            "unit": "ns",
+            "range": "± 47.55762617516455"
+          },
+          {
+            "name": "BDN.benchmark.Cluster.ClusterMigrate.MGet(Params: None)",
+            "value": 23440.077964782715,
+            "unit": "ns",
+            "range": "± 7.591792032131174"
+          },
+          {
+            "name": "BDN.benchmark.Cluster.ClusterMigrate.MSet(Params: None)",
+            "value": 22554.85696919759,
+            "unit": "ns",
+            "range": "± 13.004824275558079"
           }
         ]
       }
