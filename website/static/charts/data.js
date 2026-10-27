@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793124836646,
+  "lastUpdate": 1793124851519,
   "repoUrl": "https://github.com/microsoft/garnet",
   "entries": {
     "Benchmark": [],
@@ -826465,390 +826465,6 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "laurianti@gmail.com",
-            "name": "Federico Laurianti",
-            "username": "Laurianti"
-          },
-          "committer": {
-            "email": "noreply@github.com",
-            "name": "GitHub",
-            "username": "web-flow"
-          },
-          "distinct": true,
-          "id": "143adec7cdd19ac10e26b40dc859c7a618f8c00b",
-          "message": "Use a new ObjectOutput for each key in HCOLLECT and ZCOLLECT (#2200)\n\nCo-authored-by: Badrish Chandramouli <badrishc@microsoft.com>",
-          "timestamp": "2026-10-02T11:20:26-07:00",
-          "tree_id": "66e4e339d48f4d9aa38e8897af3f5b7fb4d8376b",
-          "url": "https://github.com/microsoft/garnet/commit/143adec7cdd19ac10e26b40dc859c7a618f8c00b"
-        },
-        "date": 1790972085639,
-        "tool": "benchmarkdotnet",
-        "benches": [
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersSmall(Params: Managed,Limit)",
-            "value": 2446.6666666666665,
-            "unit": "ns",
-            "range": "± 309.4758163393004"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersLarge(Params: Managed,Limit)",
-            "value": 2359.375,
-            "unit": "ns",
-            "range": "± 117.80903298970013"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructSmall(Params: Managed,Limit)",
-            "value": 308098.94736842107,
-            "unit": "ns",
-            "range": "± 25228.042885177383"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructLarge(Params: Managed,Limit)",
-            "value": 286705,
-            "unit": "ns",
-            "range": "± 6340.220401282759"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionSmall(Params: Managed,Limit)",
-            "value": 11737.5,
-            "unit": "ns",
-            "range": "± 215.63858652847824"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionLarge(Params: Managed,Limit)",
-            "value": 82574.72527472528,
-            "unit": "ns",
-            "range": "± 13089.169343023801"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersSmall(Params: Managed,Limit)",
-            "value": 2764.4444444444443,
-            "unit": "ns",
-            "range": "± 509.5296599875137"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersLarge(Params: Managed,Limit)",
-            "value": 2836.1702127659573,
-            "unit": "ns",
-            "range": "± 401.3019306373787"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructSmall(Params: Managed,Limit)",
-            "value": 293341.0447761194,
-            "unit": "ns",
-            "range": "± 13812.354278329454"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructLarge(Params: Managed,Limit)",
-            "value": 292908.5106382979,
-            "unit": "ns",
-            "range": "± 10907.572754089422"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionSmall(Params: Managed,Limit)",
-            "value": 13910.869565217392,
-            "unit": "ns",
-            "range": "± 1599.1382653138585"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionLarge(Params: Managed,Limit)",
-            "value": 80608.51063829787,
-            "unit": "ns",
-            "range": "± 10855.093047495177"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersSmall(Params: Managed,None)",
-            "value": 2273.684210526316,
-            "unit": "ns",
-            "range": "± 45.2413928358864"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersLarge(Params: Managed,None)",
-            "value": 2173.529411764706,
-            "unit": "ns",
-            "range": "± 79.04284810156535"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructSmall(Params: Managed,None)",
-            "value": 313839.3939393939,
-            "unit": "ns",
-            "range": "± 24763.52575446816"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructLarge(Params: Managed,None)",
-            "value": 313312.5,
-            "unit": "ns",
-            "range": "± 14085.470392943083"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionSmall(Params: Managed,None)",
-            "value": 12848.387096774193,
-            "unit": "ns",
-            "range": "± 392.31872055080885"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionLarge(Params: Managed,None)",
-            "value": 78202.38095238095,
-            "unit": "ns",
-            "range": "± 4403.721760863497"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersSmall(Params: Managed,None)",
-            "value": 2344.4444444444443,
-            "unit": "ns",
-            "range": "± 171.15674602644808"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersLarge(Params: Managed,None)",
-            "value": 2225.8064516129034,
-            "unit": "ns",
-            "range": "± 72.88228836273767"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructSmall(Params: Managed,None)",
-            "value": 305369.23076923075,
-            "unit": "ns",
-            "range": "± 4311.879832776847"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructLarge(Params: Managed,None)",
-            "value": 316178.3783783784,
-            "unit": "ns",
-            "range": "± 15832.60265791325"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionSmall(Params: Managed,None)",
-            "value": 13151.063829787234,
-            "unit": "ns",
-            "range": "± 466.658957691492"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionLarge(Params: Managed,None)",
-            "value": 86878.35051546391,
-            "unit": "ns",
-            "range": "± 13913.551748236649"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersSmall(Params: Native,None)",
-            "value": 2395.1807228915663,
-            "unit": "ns",
-            "range": "± 142.19843096955304"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersLarge(Params: Native,None)",
-            "value": 3112.7659574468084,
-            "unit": "ns",
-            "range": "± 440.91401706176987"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructSmall(Params: Native,None)",
-            "value": 236549.41176470587,
-            "unit": "ns",
-            "range": "± 16396.70860939135"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructLarge(Params: Native,None)",
-            "value": 241567.04545454544,
-            "unit": "ns",
-            "range": "± 19253.832110529034"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionSmall(Params: Native,None)",
-            "value": 11564.285714285714,
-            "unit": "ns",
-            "range": "± 425.3098890716746"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionLarge(Params: Native,None)",
-            "value": 80331,
-            "unit": "ns",
-            "range": "± 13089.981480182283"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersSmall(Params: Native,None)",
-            "value": 2627.450980392157,
-            "unit": "ns",
-            "range": "± 115.02770339800588"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersLarge(Params: Native,None)",
-            "value": 2634.782608695652,
-            "unit": "ns",
-            "range": "± 223.08268934999288"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructSmall(Params: Native,None)",
-            "value": 223266.66666666666,
-            "unit": "ns",
-            "range": "± 6173.9527296289125"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructLarge(Params: Native,None)",
-            "value": 226108.33333333334,
-            "unit": "ns",
-            "range": "± 3216.564608209802"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionSmall(Params: Native,None)",
-            "value": 12940.425531914894,
-            "unit": "ns",
-            "range": "± 1281.4070852195216"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionLarge(Params: Native,None)",
-            "value": 73287.5,
-            "unit": "ns",
-            "range": "± 1441.700384962146"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersSmall(Params: Tracked,Limit)",
-            "value": 2824.742268041237,
-            "unit": "ns",
-            "range": "± 383.25114911630595"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersLarge(Params: Tracked,Limit)",
-            "value": 3935.1063829787236,
-            "unit": "ns",
-            "range": "± 550.6022991114155"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructSmall(Params: Tracked,Limit)",
-            "value": 322189.6551724138,
-            "unit": "ns",
-            "range": "± 24697.227198109915"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructLarge(Params: Tracked,Limit)",
-            "value": 318823.72881355934,
-            "unit": "ns",
-            "range": "± 14080.5360764799"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionSmall(Params: Tracked,Limit)",
-            "value": 19052.747252747253,
-            "unit": "ns",
-            "range": "± 2781.6198581777917"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionLarge(Params: Tracked,Limit)",
-            "value": 95893.29896907216,
-            "unit": "ns",
-            "range": "± 18759.708082397494"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersSmall(Params: Tracked,Limit)",
-            "value": 3172.1649484536083,
-            "unit": "ns",
-            "range": "± 485.571456302013"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersLarge(Params: Tracked,Limit)",
-            "value": 2571.7391304347825,
-            "unit": "ns",
-            "range": "± 327.2684440882421"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructSmall(Params: Tracked,Limit)",
-            "value": 333552.17391304346,
-            "unit": "ns",
-            "range": "± 24093.67012883496"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructLarge(Params: Tracked,Limit)",
-            "value": 323272,
-            "unit": "ns",
-            "range": "± 16162.013856320378"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionSmall(Params: Tracked,Limit)",
-            "value": 16719.58762886598,
-            "unit": "ns",
-            "range": "± 2025.9071617867128"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionLarge(Params: Tracked,Limit)",
-            "value": 86411.70212765958,
-            "unit": "ns",
-            "range": "± 13760.906574778435"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersSmall(Params: Tracked,None)",
-            "value": 3100,
-            "unit": "ns",
-            "range": "± 580.7436249281923"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersLarge(Params: Tracked,None)",
-            "value": 2466.6666666666665,
-            "unit": "ns",
-            "range": "± 169.5996608010176"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructSmall(Params: Tracked,None)",
-            "value": 323689.88764044945,
-            "unit": "ns",
-            "range": "± 35772.33582273465"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructLarge(Params: Tracked,None)",
-            "value": 318947.5,
-            "unit": "ns",
-            "range": "± 27847.818699659656"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionSmall(Params: Tracked,None)",
-            "value": 20571.134020618556,
-            "unit": "ns",
-            "range": "± 2544.027268381383"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionLarge(Params: Tracked,None)",
-            "value": 80571.0843373494,
-            "unit": "ns",
-            "range": "± 7994.442126092014"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersSmall(Params: Tracked,None)",
-            "value": 2677.319587628866,
-            "unit": "ns",
-            "range": "± 313.08450491280286"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersLarge(Params: Tracked,None)",
-            "value": 2777.0833333333335,
-            "unit": "ns",
-            "range": "± 324.27381758620277"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructSmall(Params: Tracked,None)",
-            "value": 317081.25,
-            "unit": "ns",
-            "range": "± 6174.055258364096"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructLarge(Params: Tracked,None)",
-            "value": 301836.84210526315,
-            "unit": "ns",
-            "range": "± 6398.5424144284425"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionSmall(Params: Tracked,None)",
-            "value": 18881.182795698925,
-            "unit": "ns",
-            "range": "± 2556.023512114746"
-          },
-          {
-            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionLarge(Params: Tracked,None)",
-            "value": 77275,
-            "unit": "ns",
-            "range": "± 965.8957218326135"
-          }
-        ]
-      },
-      {
-        "commit": {
-          "author": {
             "email": "15467143+TedHartMS@users.noreply.github.com",
             "name": "Ted Hart",
             "username": "TedHartMS"
@@ -837379,6 +836995,210 @@ window.BENCHMARK_DATA = {
             "value": 87292.77108433735,
             "unit": "ns",
             "range": "± 10656.27930231325"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "96085550+vazois@users.noreply.github.com",
+            "name": "Vasileios Zois",
+            "username": "vazois"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9908e6c22bf758bbb289b078913a4c2a31f9a55c",
+          "message": "[Tsavorite] Validate migration and replication record layouts (#2267)\n\n* validate diskLogRecord payload bytes before allocations during serialization\n\n* Align overflow validation tests and documentation with component cleanup\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>\n\nCopilot-Session: 7e447cb0-c63c-4c78-bd34-bb7aac272245\n\n* validate upfront overflow bytes\n\n---------\n\nCopilot-Session: 7e447cb0-c63c-4c78-bd34-bb7aac272245",
+          "timestamp": "2026-10-27T11:10:34-07:00",
+          "tree_id": "7dd687556c839b0a97ab1357fea11af01f4524bb",
+          "url": "https://github.com/microsoft/garnet/commit/9908e6c22bf758bbb289b078913a4c2a31f9a55c"
+        },
+        "date": 1793124828813,
+        "tool": "benchmarkdotnet",
+        "benches": [
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersSmall(Params: Managed,Limit)",
+            "value": 844.943820224719,
+            "unit": "ns",
+            "range": "± 281.63937126107015"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersLarge(Params: Managed,Limit)",
+            "value": 701.6483516483516,
+            "unit": "ns",
+            "range": "± 147.09228951968095"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructSmall(Params: Managed,Limit)",
+            "value": 164032.85714285713,
+            "unit": "ns",
+            "range": "± 7940.8815892241255"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructLarge(Params: Managed,Limit)",
+            "value": 168725.8064516129,
+            "unit": "ns",
+            "range": "± 5085.270739559858"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionSmall(Params: Managed,Limit)",
+            "value": 4274.117647058823,
+            "unit": "ns",
+            "range": "± 289.56163139364673"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionLarge(Params: Managed,Limit)",
+            "value": 46167.391304347824,
+            "unit": "ns",
+            "range": "± 8719.941887794723"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersSmall(Params: Managed,None)",
+            "value": 514.8936170212766,
+            "unit": "ns",
+            "range": "± 119.09826683508271"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersLarge(Params: Managed,None)",
+            "value": 522.3529411764706,
+            "unit": "ns",
+            "range": "± 91.77673554706041"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructSmall(Params: Managed,None)",
+            "value": 170775,
+            "unit": "ns",
+            "range": "± 2547.414018532948"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructLarge(Params: Managed,None)",
+            "value": 166000,
+            "unit": "ns",
+            "range": "± 2542.010657298309"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionSmall(Params: Managed,None)",
+            "value": 4460.227272727273,
+            "unit": "ns",
+            "range": "± 353.81005772702144"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionLarge(Params: Managed,None)",
+            "value": 41915.66265060241,
+            "unit": "ns",
+            "range": "± 3416.904958374408"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersSmall(Params: Native,None)",
+            "value": 620.9302325581396,
+            "unit": "ns",
+            "range": "± 85.56563228411613"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersLarge(Params: Native,None)",
+            "value": 689.89898989899,
+            "unit": "ns",
+            "range": "± 96.35706289835662"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructSmall(Params: Native,None)",
+            "value": 134108.33333333334,
+            "unit": "ns",
+            "range": "± 3384.8661481038966"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructLarge(Params: Native,None)",
+            "value": 135732.5,
+            "unit": "ns",
+            "range": "± 4660.988532764708"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionSmall(Params: Native,None)",
+            "value": 4610,
+            "unit": "ns",
+            "range": "± 468.3343662936614"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionLarge(Params: Native,None)",
+            "value": 40002.5,
+            "unit": "ns",
+            "range": "± 2168.472308308025"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersSmall(Params: Tracked,Limit)",
+            "value": 662.1052631578947,
+            "unit": "ns",
+            "range": "± 172.0829509082207"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersLarge(Params: Tracked,Limit)",
+            "value": 704.4444444444445,
+            "unit": "ns",
+            "range": "± 136.4980232898903"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructSmall(Params: Tracked,Limit)",
+            "value": 173309.52380952382,
+            "unit": "ns",
+            "range": "± 6320.2272853469185"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructLarge(Params: Tracked,Limit)",
+            "value": 178064.70588235295,
+            "unit": "ns",
+            "range": "± 7900.382849326673"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionSmall(Params: Tracked,Limit)",
+            "value": 5826.7441860465115,
+            "unit": "ns",
+            "range": "± 581.1599797169655"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionLarge(Params: Tracked,Limit)",
+            "value": 44634.93975903615,
+            "unit": "ns",
+            "range": "± 6744.327946322471"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersSmall(Params: Tracked,None)",
+            "value": 607.5268817204301,
+            "unit": "ns",
+            "range": "± 79.72310660053463"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ResetParametersLarge(Params: Tracked,None)",
+            "value": 614.2857142857143,
+            "unit": "ns",
+            "range": "± 120.71217242444347"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructSmall(Params: Tracked,None)",
+            "value": 177810,
+            "unit": "ns",
+            "range": "± 3414.812933151837"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.ConstructLarge(Params: Tracked,None)",
+            "value": 184561.22448979592,
+            "unit": "ns",
+            "range": "± 7046.713664495511"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionSmall(Params: Tracked,None)",
+            "value": 5828.571428571428,
+            "unit": "ns",
+            "range": "± 638.1023453761968"
+          },
+          {
+            "name": "BDN.benchmark.Lua.LuaRunnerOperations.CompileForSessionLarge(Params: Tracked,None)",
+            "value": 41811.11111111111,
+            "unit": "ns",
+            "range": "± 2648.8204922191317"
           }
         ]
       }
