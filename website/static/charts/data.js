@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793138780594,
+  "lastUpdate": 1793138811150,
   "repoUrl": "https://github.com/microsoft/garnet",
   "entries": {
     "Benchmark": [],
@@ -912931,510 +912931,6 @@ window.BENCHMARK_DATA = {
             "username": "web-flow"
           },
           "distinct": true,
-          "id": "b94939630e792cc279b0965de1f18d6ef6108622",
-          "message": "Fix CompletionEvent disposal and reset bugs, and coalesce LogSizeTracker signals (#2198)\n\n* Fix CompletionEvent disposal, reset and per-record signalling\n\nCompletionEvent signals by allocating a fresh SemaphoreSlim, swapping it in, releasing the retired one, and abandoning it. That design is kept -- it delegates sync waits, async waits, cancellation and timeouts to SemaphoreSlim -- but it had several bugs around its edges, and one of its callers signalled far more often than it needed to.\n\nLogSizeTracker signalled on every object-bearing record while over budget, which is the steady state for a memory-capped instance: InternalUpsert, InternalRMW and InternalDelete all call IncrementSize on the insert path. A resizePending flag now coalesces that, so an over-budget record update costs one read of a line written only on the signal edge and on resizer wakeups. Measured at 16 threads, that path goes from 5.8M to 3052M updates/s.\n\nResizerTask must capture the event generation, then clear the flag, then sample sizes. Clearing before capturing loses wakeups: a signaller in that window has its signal consumed by the capture rather than the wait, while the flag stays latched, parking the resizer for the full ResizeTaskDelaySeconds with work outstanding and stalling the allocation retry loop NeedToWaitForClose drives through Signal().\n\nDispose() disposed the semaphore and nulled the field. SemaphoreSlim.Dispose() does not pulse, so threads parked in the infinite waits -- ShiftBeginAddress, TsavoriteLog.AllocateBlock, the ALLOCATE_FAILED retry -- were never woken; a capture taken beforehand threw ObjectDisposedException from inside an RMW with its epoch suspended; and a wait on the live field threw NullReferenceException. It now releases the live generation and CAS-installs a permanently signaled tombstone, so every waiter present and future falls through and its own retry loop can observe the owner's shutdown state. Set() refuses to replace the tombstone, which would otherwise un-signal a disposed event and double-release it.\n\nBecause disposal now wakes waiters, the retry loops need terminal checks or they would spin where they used to hang: AllocatorBase gains IsDisposed/ThrowIfDisposed, and the checks are added to WaitToRetryNow, ShiftBeginAddress, HandleOperationStatus's ALLOCATE_FAILED case, both AllocateBlock overloads, AllocateBlockPartial, and the ten async enqueue loops, where an already-completed await does not yield and would spin at full CPU. ShiftBeginAddress returns rather than falling through, because its head shift is uncapped and the OnPagesClosed that follows would free pages concurrently with the teardown Dispose is already performing. AllocatorBase.Dispose now releases flushEvent waiters before tearing down the epoch and buffer pool they would otherwise touch on the way out.\n\nAllocatorBase.ResetCore called flushEvent.Initialize(), which overwrites the field without releasing the outgoing semaphore, so anyone parked on it was stranded -- every later Set() signals the new instance. It now calls Set().\n\nGarnet.client had its own copy of the type whose Set() did dispose the retired semaphore, giving GarnetClient a reachable ObjectDisposedException in the window between capturing the event and awaiting it. The duplicate is deleted in favour of the shared type via InternalsVisibleTo.\n\n* Add a sustained-pressure test for LogSizeTracker signal coalescing\n\nThe existing coverage exercised the over-budget allocation path only with the resizer stopped. The case the coalescing exists for is the opposite one: the resizer running but unable to keep up, so the heap stays over budget while inserters keep arriving. Two paths then ask for a signal on every attempt -- every object-bearing record update via IncrementSize, and every page-turn retry via NeedToWaitForClose -> Signal, the latter spinning for as long as a thread is blocked waiting for eviction.\n\nEight threads upserting 200,000 records with 4KB heap objects into a 64KB budget holds the store over budget for ~95% of sampled intervals and finishes in about 1.2s. In that state roughly 245,000 signal attempts collapse to about 1,900 actual signals, a ~125x suppression worth roughly 21MB of gen-0 garbage. Wall time is unchanged, so this is a GC-pressure and contention result rather than a throughput one.\n\nThe test asserts the premise it depends on (pressure really was sustained), that every inserter completes (the allocation path makes progress rather than livelocking), and that signals stay well under one per ten records. Removing the coalescing guard takes that last figure to ~236,000 and fails the assertion, so it is a regression test rather than a tautology.\n\nLogSizeTracker gains an internal ResizerSignalCount for this, incremented only on the path that genuinely signals, so the coalesced path is unaffected.\n\n* Wake flushEvent waiters before any allocator state is reclaimed\n\nReleasing flushEvent makes parked waiters runnable, and a waiter's epoch.Resume() calls Acquire(), which drains pending epoch actions when drainCount > 0. Those actions include the page-close callbacks that dereference allocator state, so where the release happens decides what that drain can touch.\n\nReleasing it in AllocatorBase.Dispose() was too late for the object allocator: ObjectAllocatorImpl.Dispose() clears objectPages and the page values before calling base.Dispose(), and a page-close callback drained against a null objectPages is escalated to FailFast by OnPagesClosedWorker. Move the release into StopSizeTrackerForDispose(), which both Dispose() overrides call before reclaiming anything, so waiters are woken while that state is still intact. It goes before Stop(wait: true) as well, so a resizer parked on flushEvent cannot keep that wait spinning.\n\nThis narrows the window rather than closing it, and the XML doc now says so: a thread can still begin a fresh allocation at any point during teardown and drain a callback on its way in. Disposing an allocator with operations in flight is unsafe by contract and has to be prevented by the owner, which is why the resizer -- the one actor this class owns -- is stopped and waited for here.\n\nShiftBeginAddress had a second route past the disposal check: the flush-completed break skipped it and went on to the uncapped head shift. The check now sits after the wait loop so it covers every exit, including the noFlush path.\n\nThe sustained-pressure test leaked its sampler thread when an inserter timed out: the assertion threw before stopSampling was set, so the sampler kept reading tracker while TearDown cleared it, replacing the intended timeout failure with a NullReferenceException. Stop and join it in a finally, and make it a background thread so it can never hold up the test host.\n\n---------\n\nCo-authored-by: Ted Hart <tedhar@users.noreply.github.com>",
-          "timestamp": "2026-10-02T11:52:48-07:00",
-          "tree_id": "89604fe8313d4ad4bf1ed1e91170e6aca3ae44f3",
-          "url": "https://github.com/microsoft/garnet/commit/b94939630e792cc279b0965de1f18d6ef6108622"
-        },
-        "date": 1790977319702,
-        "tool": "benchmarkdotnet",
-        "benches": [
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptLoad(Params: Managed,Limit)",
-            "value": 58878.25927734375,
-            "unit": "ns",
-            "range": "± 405.691152605631"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsTrue(Params: Managed,Limit)",
-            "value": 14458.69880089393,
-            "unit": "ns",
-            "range": "± 108.73204327283733"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsFalse(Params: Managed,Limit)",
-            "value": 16247.253887469951,
-            "unit": "ns",
-            "range": "± 56.32801397881535"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.Eval(Params: Managed,Limit)",
-            "value": 78540.71628736414,
-            "unit": "ns",
-            "range": "± 2660.393505115712"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.EvalSha(Params: Managed,Limit)",
-            "value": 33264.376220703125,
-            "unit": "ns",
-            "range": "± 342.1210716819606"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.SmallScript(Params: Managed,Limit)",
-            "value": 73961.52994791667,
-            "unit": "ns",
-            "range": "± 458.05101934776343"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.LargeScript(Params: Managed,Limit)",
-            "value": 5380041.770833333,
-            "unit": "ns",
-            "range": "± 73659.2406164366"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ArrayReturn(Params: Managed,Limit)",
-            "value": 158482.37817382812,
-            "unit": "ns",
-            "range": "± 14220.475528072411"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptLoad(Params: Managed,Limit)",
-            "value": 60912.9629952567,
-            "unit": "ns",
-            "range": "± 726.0678151407875"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsTrue(Params: Managed,Limit)",
-            "value": 16726.12855825851,
-            "unit": "ns",
-            "range": "± 791.4269076007254"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsFalse(Params: Managed,Limit)",
-            "value": 13980.222379244291,
-            "unit": "ns",
-            "range": "± 86.30410722989438"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.Eval(Params: Managed,Limit)",
-            "value": 79381.31277901786,
-            "unit": "ns",
-            "range": "± 410.9909613862245"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.EvalSha(Params: Managed,Limit)",
-            "value": 34123.014948918266,
-            "unit": "ns",
-            "range": "± 266.90126723170664"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.SmallScript(Params: Managed,Limit)",
-            "value": 82631.03922526042,
-            "unit": "ns",
-            "range": "± 656.1810585299678"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.LargeScript(Params: Managed,Limit)",
-            "value": 5509070.647321428,
-            "unit": "ns",
-            "range": "± 120783.80934272223"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ArrayReturn(Params: Managed,Limit)",
-            "value": 158290.77807617188,
-            "unit": "ns",
-            "range": "± 12899.266616071101"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptLoad(Params: Managed,None)",
-            "value": 60257.96346028646,
-            "unit": "ns",
-            "range": "± 442.9411315902187"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsTrue(Params: Managed,None)",
-            "value": 15248.958740234375,
-            "unit": "ns",
-            "range": "± 226.6270551949357"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsFalse(Params: Managed,None)",
-            "value": 13185.664476667132,
-            "unit": "ns",
-            "range": "± 139.40247193243172"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.Eval(Params: Managed,None)",
-            "value": 74980.50862630208,
-            "unit": "ns",
-            "range": "± 936.4789068881961"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.EvalSha(Params: Managed,None)",
-            "value": 31344.786658653848,
-            "unit": "ns",
-            "range": "± 136.11296947076417"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.SmallScript(Params: Managed,None)",
-            "value": 74891.84139476102,
-            "unit": "ns",
-            "range": "± 1439.7264163248365"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.LargeScript(Params: Managed,None)",
-            "value": 5469109.947916667,
-            "unit": "ns",
-            "range": "± 71195.75298952425"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ArrayReturn(Params: Managed,None)",
-            "value": 159183.08276367188,
-            "unit": "ns",
-            "range": "± 13384.640271957367"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptLoad(Params: Managed,None)",
-            "value": 63332.158203125,
-            "unit": "ns",
-            "range": "± 837.2898344276981"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsTrue(Params: Managed,None)",
-            "value": 15720.527866908482,
-            "unit": "ns",
-            "range": "± 127.50276812222377"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsFalse(Params: Managed,None)",
-            "value": 14455.461992536273,
-            "unit": "ns",
-            "range": "± 163.788341736231"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.Eval(Params: Managed,None)",
-            "value": 79483.65295410156,
-            "unit": "ns",
-            "range": "± 1213.6941284865638"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.EvalSha(Params: Managed,None)",
-            "value": 33998.41875348772,
-            "unit": "ns",
-            "range": "± 423.027631695106"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.SmallScript(Params: Managed,None)",
-            "value": 80351.75040108817,
-            "unit": "ns",
-            "range": "± 2051.745457247878"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.LargeScript(Params: Managed,None)",
-            "value": 5494064.947916667,
-            "unit": "ns",
-            "range": "± 63477.48110727256"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ArrayReturn(Params: Managed,None)",
-            "value": 166123.6508147885,
-            "unit": "ns",
-            "range": "± 13933.829950154053"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptLoad(Params: Native,None)",
-            "value": 59351.81535993303,
-            "unit": "ns",
-            "range": "± 1009.1757081744803"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsTrue(Params: Native,None)",
-            "value": 15381.9396548801,
-            "unit": "ns",
-            "range": "± 500.5696622328491"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsFalse(Params: Native,None)",
-            "value": 13664.00139218285,
-            "unit": "ns",
-            "range": "± 307.9984920360381"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.Eval(Params: Native,None)",
-            "value": 81011.5107421875,
-            "unit": "ns",
-            "range": "± 2117.548003855005"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.EvalSha(Params: Native,None)",
-            "value": 31351.979627107317,
-            "unit": "ns",
-            "range": "± 661.4510081799946"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.SmallScript(Params: Native,None)",
-            "value": 74269.99230018028,
-            "unit": "ns",
-            "range": "± 641.0457287897044"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.LargeScript(Params: Native,None)",
-            "value": 4575494.777960527,
-            "unit": "ns",
-            "range": "± 157641.21597339417"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ArrayReturn(Params: Native,None)",
-            "value": 147631.9548576109,
-            "unit": "ns",
-            "range": "± 4468.235692818215"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptLoad(Params: Native,None)",
-            "value": 64188.25141059028,
-            "unit": "ns",
-            "range": "± 1290.5792615019323"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsTrue(Params: Native,None)",
-            "value": 16212.39070892334,
-            "unit": "ns",
-            "range": "± 298.9993838140286"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsFalse(Params: Native,None)",
-            "value": 14622.101974487305,
-            "unit": "ns",
-            "range": "± 478.3314586578024"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.Eval(Params: Native,None)",
-            "value": 85007.05891927083,
-            "unit": "ns",
-            "range": "± 1244.1305641976076"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.EvalSha(Params: Native,None)",
-            "value": 37110.98185221354,
-            "unit": "ns",
-            "range": "± 1084.3595308322979"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.SmallScript(Params: Native,None)",
-            "value": 82611.45553588867,
-            "unit": "ns",
-            "range": "± 1600.833350910252"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.LargeScript(Params: Native,None)",
-            "value": 4517936.607142857,
-            "unit": "ns",
-            "range": "± 57216.98109837652"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ArrayReturn(Params: Native,None)",
-            "value": 153024.38151041666,
-            "unit": "ns",
-            "range": "± 2648.1940117702616"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptLoad(Params: Tracked,Limit)",
-            "value": 61302.61928013393,
-            "unit": "ns",
-            "range": "± 899.032042928728"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsTrue(Params: Tracked,Limit)",
-            "value": 15256.050917681525,
-            "unit": "ns",
-            "range": "± 311.36241393971744"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsFalse(Params: Tracked,Limit)",
-            "value": 16966.666353665867,
-            "unit": "ns",
-            "range": "± 462.7330561157362"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.Eval(Params: Tracked,Limit)",
-            "value": 75956.35811941964,
-            "unit": "ns",
-            "range": "± 483.73437462275336"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.EvalSha(Params: Tracked,Limit)",
-            "value": 37874.85621252725,
-            "unit": "ns",
-            "range": "± 4722.3037642906675"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.SmallScript(Params: Tracked,Limit)",
-            "value": 76023.39935302734,
-            "unit": "ns",
-            "range": "± 1489.4622666851835"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.LargeScript(Params: Tracked,Limit)",
-            "value": 5067259.6484375,
-            "unit": "ns",
-            "range": "± 109568.19640227093"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ArrayReturn(Params: Tracked,Limit)",
-            "value": 163678.6387567935,
-            "unit": "ns",
-            "range": "± 4110.117836209113"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptLoad(Params: Tracked,Limit)",
-            "value": 63814.19724684495,
-            "unit": "ns",
-            "range": "± 755.7964222279934"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsTrue(Params: Tracked,Limit)",
-            "value": 20079.600321451824,
-            "unit": "ns",
-            "range": "± 342.0321032030489"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsFalse(Params: Tracked,Limit)",
-            "value": 14919.434650127705,
-            "unit": "ns",
-            "range": "± 237.731821951707"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.Eval(Params: Tracked,Limit)",
-            "value": 77753.15212673611,
-            "unit": "ns",
-            "range": "± 1652.6030149381745"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.EvalSha(Params: Tracked,Limit)",
-            "value": 37282.72181919643,
-            "unit": "ns",
-            "range": "± 414.73898249151154"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.SmallScript(Params: Tracked,Limit)",
-            "value": 77904.92728097098,
-            "unit": "ns",
-            "range": "± 442.2123121418777"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.LargeScript(Params: Tracked,Limit)",
-            "value": 4971363.225446428,
-            "unit": "ns",
-            "range": "± 44746.82744375099"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ArrayReturn(Params: Tracked,Limit)",
-            "value": 162686.2353515625,
-            "unit": "ns",
-            "range": "± 1307.694379625909"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptLoad(Params: Tracked,None)",
-            "value": 59907.21476236979,
-            "unit": "ns",
-            "range": "± 601.9252040912032"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsTrue(Params: Tracked,None)",
-            "value": 14595.901590983072,
-            "unit": "ns",
-            "range": "± 83.40463807981696"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsFalse(Params: Tracked,None)",
-            "value": 16529.07496861049,
-            "unit": "ns",
-            "range": "± 95.37375438346817"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.Eval(Params: Tracked,None)",
-            "value": 75133.65275065105,
-            "unit": "ns",
-            "range": "± 161.52465372283592"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.EvalSha(Params: Tracked,None)",
-            "value": 34515.63807896205,
-            "unit": "ns",
-            "range": "± 313.9120792177587"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.SmallScript(Params: Tracked,None)",
-            "value": 76929.25455729167,
-            "unit": "ns",
-            "range": "± 861.4537025610438"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.LargeScript(Params: Tracked,None)",
-            "value": 4865935.714285715,
-            "unit": "ns",
-            "range": "± 50555.614154909206"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ArrayReturn(Params: Tracked,None)",
-            "value": 159682.07068810097,
-            "unit": "ns",
-            "range": "± 727.5401227316733"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptLoad(Params: Tracked,None)",
-            "value": 60502.650146484375,
-            "unit": "ns",
-            "range": "± 325.20800976244607"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsTrue(Params: Tracked,None)",
-            "value": 14987.477416992188,
-            "unit": "ns",
-            "range": "± 173.24225583768612"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsFalse(Params: Tracked,None)",
-            "value": 18385.311889648438,
-            "unit": "ns",
-            "range": "± 137.7565534503094"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.Eval(Params: Tracked,None)",
-            "value": 76145.40056501116,
-            "unit": "ns",
-            "range": "± 459.81443266947906"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.EvalSha(Params: Tracked,None)",
-            "value": 36100.70027669271,
-            "unit": "ns",
-            "range": "± 255.37778715315724"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.SmallScript(Params: Tracked,None)",
-            "value": 80571.24267578125,
-            "unit": "ns",
-            "range": "± 420.32355602429084"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.LargeScript(Params: Tracked,None)",
-            "value": 5081997.5,
-            "unit": "ns",
-            "range": "± 58325.53941000386"
-          },
-          {
-            "name": "BDN.benchmark.Operations.ScriptOperations.ArrayReturn(Params: Tracked,None)",
-            "value": 164725.55401141828,
-            "unit": "ns",
-            "range": "± 1043.0585801273328"
-          }
-        ]
-      },
-      {
-        "commit": {
-          "author": {
-            "email": "15467143+TedHartMS@users.noreply.github.com",
-            "name": "Ted Hart",
-            "username": "TedHartMS"
-          },
-          "committer": {
-            "email": "noreply@github.com",
-            "name": "GitHub",
-            "username": "web-flow"
-          },
-          "distinct": true,
           "id": "fc97f951e82e6479bd61bddaa6e9de7f48b79647",
           "message": "Allocate test ports dynamically from a non-ephemeral range (#2193)\n\n* Refuse a second bind on an occupied port on Windows, and add an avalanched hash\n\nOn Windows GarnetServerTcp set SO_REUSEADDR unconditionally, and cleared\nSO_REUSEPORT only on Linux, macOS, and FreeBSD. Windows SO_REUSEADDR is\npermissive: it lets a socket bind an address and port another socket already\nholds. Two live servers therefore both bound the same port and the OS split\nincoming connections between them, so a port conflict surfaced as plausible but\nwrong results rather than as a bind failure. Windows now sets\nSO_EXCLUSIVEADDRUSE, which refuses the second bind; the Unix paths are\nunchanged. GarnetServerTcpTests covered this but was skipped on Windows because\nthe behavior it asserts did not hold there. It now runs on every platform, and\nits TIME_WAIT rebind case confirms exclusive use does not block restarts.\n\nUtility.GetHashCodeWithMix applies a MurmurHash3 fmix64 finalizer to HashBytes.\nHashBytes is a multiply-accumulate, and multiplication propagates information\nonly toward higher bits, so its low bits carry almost no entropy: flipping one\ninput bit changes some output bits with probability 1.000 rather than 0.5. The\nfinalizer's right shifts move entropy back down, which makes it safe to reduce\nthe result modulo a power of two. UtilityTests asserts the avalanche property\ndirectly, since that, rather than the hash value, is why the method exists.\n\n* Allocate test ports dynamically from a non-ephemeral range\n\nTest ports were fixed per sub-project from a base of 33278, shifted by an\noptional GARNET_TEST_PORT_SLOT offset. That base predates the slot mechanism and\nsits inside Linux's default outbound-connection range (32768-60999,\nnet.ipv4.ip_local_port_range), so on Linux the kernel could assign a test's port\nto a connect() between the moment the port was observed free and the moment the\nserver bound it. Probing cannot close that window; only staying out of the range\ncan. The slot mechanism encoded 49152 as the ephemeral floor, which is the\nWindows and macOS value, so slot 7 looked like the boundary case while slot 0 was\nalready unsafe on Linux. Windows and macOS were never affected, which is why the\nflakes were Linux-only.\n\nPorts now come from [16384, 32768), below every supported platform's ephemeral\nrange and above the crowded region that holds both ports a developer is likely to\nbe running (6379, 5432, 11211, 8080) and ports this suite itself uses\n(10000-10002 Azurite). Each test host leases one aligned 32-port block, held by\nan exclusively locked file for the life of the process, which is what keeps\nconcurrent hosts apart; the OS releases the lock on exit, crash, or kill, so a\nblock frees itself. The lease is taken first and the ports probed second, because\nsoftware outside the suite, or a server stranded by a killed run, holds ports\nwhile holding no lease.\n\nBlocks are searched from a start derived from the checkout and the project name,\nso a project returns to the same ports run after run and netstat output stays\ninterpretable. On collision the search advances by a stride derived from the\nprocess, so two hosts that start at the same block diverge rather than walking in\nlockstep. The stride is forced odd and the block count is a power of two, which\ntogether make the walk visit every block exactly once: completing it proves no\nblock is free rather than exhausting a retry budget. The hash is\nUtility.GetHashCodeWithMix, because the index is cut from the low bits that\nHashBytes alone leaves unmixed.\n\nThis replaces slots entirely. Concurrency is no longer capped at seven\ncheckouts, GARNET_TEST_PORT_SLOT is gone and nothing needs setting, and\nTestPortAssignment, ClusterPortAssignment, and the band-width invariants they\nrequired are deleted - projects are identified by assembly name, so adding one\nneeds no central registration.\n\nSpecial cases, each commented where it lives:\n- Ports 30000-30999 are carved out for test/docker-tests/validate_docker_images.py,\n  which allocates from its own fixed base and can run alongside this suite.\n  TestPortAllocatorTests reads that base out of the Python file so moving either\n  side without the other fails as a test.\n- The probe binds the IPv4 and IPv6 wildcards separately and exclusively. One\n  dual-mode socket handles IPv4-mapped addresses differently per platform, and a\n  shared bind succeeds alongside a listener on a specific address under that\n  wildcard.\n- A failed probe deliberately ignores the socket error code: Windows reports\n  AccessDenied for ports excluded by Hyper-V, WSL, or Docker, not\n  AddressAlreadyInUse.\n- Cluster nodes keep contiguous ports because node n binds base + n; block\n  alignment keeps that run from straddling a boundary.\n- GARNET_TEST_PORT_BASE pins a base port for reproduction or a fixed firewall\n  opening. Pinned ports are still leased and probed.\n\nGarnetServerTcp.Start now reports the endpoint and the operating system's reason\nwhen a bind fails, which the raw SocketException names neither of.\nTestUtils.OnTearDown adds the allocation context, so a conflict reads as software\noutside the suite rather than as a defect in Garnet or in the test.\n\n* Drop stale port-slot instructions from the add-garnet-command skill\n\nThe skill still told readers to set GARNET_TEST_PORT_SLOT, which no longer\nexists; test hosts now claim their ports without configuration.\n\n* Cover the port allocator's failure paths\n\nReserve's error paths decide whether a run stops clearly or proceeds on ports it\ndoes not own, and none of them ran in an ordinary suite: a block another host\nholds, a pinned base port, and every block exhausted. A regression in any of\nthem would surface as the silent cross-checkout corruption the allocator exists\nto prevent.\n\nLeases in these tests are redirected to a private directory. Holding blocks in\nthe shared one would stop concurrent runs in other checkouts from starting,\nwhich is the very failure under test.\n\nWriting them found a real defect in the first draft: two tests took the same\nport from a deterministic helper, and because a reservation holds its lease for\nthe life of the process while binding nothing, the second saw ports that read as\nfree inside a block that was already leased. The helper now checks both, which\nis the same distinction the allocator draws.\n\nBuildPortConflictReport is split out of ReportPortConflictIfBindFailed so the\ndecision and the wording can be asserted without making a real test fail.\n\n* Name the alternate port explicitly in ConnectionLimitAcrossListenersTests\n\nThe fixture built its second listener from TestUtils.TestPort + 1. That is the\nport TestUtils.AlternateTestPort returns, and it is inside the block this test\nhost leases, so the behavior is unchanged - but the arithmetic only works\nbecause the reservation covers two ports, which the expression does not say.\nNaming the property states the dependency the fixture actually has.\n\n* Fix overlapping pinned reservations and misleading bind diagnostics\n\nReview of the allocator found four defects, all in paths that only run when\nsomething has already gone wrong.\n\nReservePinned leased only the block containing its first port. A pinned base is\ndeliberately not block-aligned, so a run can cross into the next block: base\n16415 with two ports leases block 0 while port 16416 sits unleased in block 1.\nAnother host could lease that block and be handed an overlapping run, both\nprobes passing because neither side had bound yet. Every intersected block is\nnow leased. IntersectedBlocks also skips ports outside the allocatable range,\nwhere PortBlock is not meaningful - it returned -480 for port 1024 and 738 for\nport 40000, neither of which names a block.\n\nThe teardown report fired for every bind failure but always diagnosed a port\nconflict. GarnetServerTcp also emits \"Could not bind\" for AccessDenied, which is\na platform-reserved range, and AddressNotAvailable, which is an address absent\nfrom the machine; neither is another process taking the port. The report now\nparses the socket error and stays silent unless it is AddressAlreadyInUse.\n\nThe report read the standalone port field, which ClusterTestContext.ReservePorts\nnever sets, so every cluster bind failure claimed the host had reserved no ports\nwhile it held an eight-port run. The allocator now records each reservation and\nthe report looks up the run covering the failing port, which also lets it name\nthe project that holds it.\n\nThe report asserted that a reserved port cannot have been taken by the OS. That\nis true only inside the allocatable range. GARNET_TEST_PORT_BASE can pin a run\nabove it, where the kernel really can assign the port to an outbound connection\nbetween the probe and the bind - the one collision pinning opts into. Pinned\nruns outside the range are now described as exactly that, and an endpoint the\ntest built itself is reported as carrying no allocator guarantee at all.\n\nEach fix is covered by a test verified by reverting the fix: restoring the\nsingle-block lease reports the tail of a straddling run as still available, and\nremoving the error-code gate reports an AccessDenied failure as software outside\nthe suite.",
           "timestamp": "2026-10-02T19:54:35-07:00",
@@ -926835,6 +926331,270 @@ window.BENCHMARK_DATA = {
             "value": 161880.029296875,
             "unit": "ns",
             "range": "± 1502.4231360856734"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "badrishc@microsoft.com",
+            "name": "Badrish Chandramouli",
+            "username": "badrishc"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "df36a8553e2c10aaf97e3f1d8f51052a891eafc3",
+          "message": "Do not block in blocking commands run by EXEC or a script (#2285)\n\nA blocking list or sorted-set command run by EXEC on an empty key waited\nfor an item while the transaction held the key's exclusive lock. No client\ncould push to the key, so the connection hung, along with every other\nclient writing that key.\n\nSessions running a transaction or a script now serve these commands\nwithout waiting: they return an available item or reply as on timeout.\n\nA push run by EXEC also no longer waits for the item broker when notifying\nwaiters, since the broker may be waiting for a key lock the transaction\nholds.\n\nFixes #2266\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+          "timestamp": "2026-10-27T14:48:08-07:00",
+          "tree_id": "fceecfaed06ea6a1958da3b3e38c9950763b98f0",
+          "url": "https://github.com/microsoft/garnet/commit/df36a8553e2c10aaf97e3f1d8f51052a891eafc3"
+        },
+        "date": 1793138794110,
+        "tool": "benchmarkdotnet",
+        "benches": [
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptLoad(Params: Managed,Limit)",
+            "value": 32762.755126953125,
+            "unit": "ns",
+            "range": "± 138.0071984219919"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsTrue(Params: Managed,Limit)",
+            "value": 6718.98569379534,
+            "unit": "ns",
+            "range": "± 50.86522997155872"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsFalse(Params: Managed,Limit)",
+            "value": 6436.554616292317,
+            "unit": "ns",
+            "range": "± 40.07526577431175"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.Eval(Params: Managed,Limit)",
+            "value": 43900.14607747396,
+            "unit": "ns",
+            "range": "± 254.71842384856816"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.EvalSha(Params: Managed,Limit)",
+            "value": 15298.9988054548,
+            "unit": "ns",
+            "range": "± 110.88886382405009"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.SmallScript(Params: Managed,Limit)",
+            "value": 41018.407767159595,
+            "unit": "ns",
+            "range": "± 222.93906453298422"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.LargeScript(Params: Managed,Limit)",
+            "value": 2740384.7916666665,
+            "unit": "ns",
+            "range": "± 24584.269595993435"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ArrayReturn(Params: Managed,Limit)",
+            "value": 88987.32543945312,
+            "unit": "ns",
+            "range": "± 6703.427149620358"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptLoad(Params: Managed,None)",
+            "value": 33661.383463541664,
+            "unit": "ns",
+            "range": "± 239.32535617724946"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsTrue(Params: Managed,None)",
+            "value": 6735.715321132115,
+            "unit": "ns",
+            "range": "± 45.91382369236148"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsFalse(Params: Managed,None)",
+            "value": 6417.889556884766,
+            "unit": "ns",
+            "range": "± 43.64447704361953"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.Eval(Params: Managed,None)",
+            "value": 44707.70009358724,
+            "unit": "ns",
+            "range": "± 352.54447119641776"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.EvalSha(Params: Managed,None)",
+            "value": 16955.8984375,
+            "unit": "ns",
+            "range": "± 151.23374971986087"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.SmallScript(Params: Managed,None)",
+            "value": 40068.10963948568,
+            "unit": "ns",
+            "range": "± 288.8545928444736"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.LargeScript(Params: Managed,None)",
+            "value": 2778213.4114583335,
+            "unit": "ns",
+            "range": "± 16117.439904407634"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ArrayReturn(Params: Managed,None)",
+            "value": 92834.37400350765,
+            "unit": "ns",
+            "range": "± 5990.37732891948"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptLoad(Params: Native,None)",
+            "value": 36667.38516000601,
+            "unit": "ns",
+            "range": "± 334.4292287876272"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsTrue(Params: Native,None)",
+            "value": 7181.929779052734,
+            "unit": "ns",
+            "range": "± 22.79857085005792"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsFalse(Params: Native,None)",
+            "value": 8039.905439104353,
+            "unit": "ns",
+            "range": "± 69.65291554733732"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.Eval(Params: Native,None)",
+            "value": 49789.214680989586,
+            "unit": "ns",
+            "range": "± 230.66523642045337"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.EvalSha(Params: Native,None)",
+            "value": 15851.048932756696,
+            "unit": "ns",
+            "range": "± 141.21179488312004"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.SmallScript(Params: Native,None)",
+            "value": 43673.51603190104,
+            "unit": "ns",
+            "range": "± 473.5905412278266"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.LargeScript(Params: Native,None)",
+            "value": 2545004.8978365385,
+            "unit": "ns",
+            "range": "± 11947.870146770612"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ArrayReturn(Params: Native,None)",
+            "value": 86998.16284179688,
+            "unit": "ns",
+            "range": "± 467.45174904102316"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptLoad(Params: Tracked,Limit)",
+            "value": 36740.289306640625,
+            "unit": "ns",
+            "range": "± 272.38331619949923"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsTrue(Params: Tracked,Limit)",
+            "value": 7344.032541910808,
+            "unit": "ns",
+            "range": "± 34.18615999375457"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsFalse(Params: Tracked,Limit)",
+            "value": 6693.666604849009,
+            "unit": "ns",
+            "range": "± 19.258912174864612"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.Eval(Params: Tracked,Limit)",
+            "value": 47927.959798177086,
+            "unit": "ns",
+            "range": "± 305.5198096478324"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.EvalSha(Params: Tracked,Limit)",
+            "value": 15940.791575113932,
+            "unit": "ns",
+            "range": "± 41.11754845769381"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.SmallScript(Params: Tracked,Limit)",
+            "value": 43088.99617513021,
+            "unit": "ns",
+            "range": "± 374.7466983367141"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.LargeScript(Params: Tracked,Limit)",
+            "value": 2818880.6082589286,
+            "unit": "ns",
+            "range": "± 22462.919437462053"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ArrayReturn(Params: Tracked,Limit)",
+            "value": 94200.24226262019,
+            "unit": "ns",
+            "range": "± 474.2505032501107"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptLoad(Params: Tracked,None)",
+            "value": 37650.0492976262,
+            "unit": "ns",
+            "range": "± 136.358739482808"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsTrue(Params: Tracked,None)",
+            "value": 6679.319381713867,
+            "unit": "ns",
+            "range": "± 47.971311410357046"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ScriptExistsFalse(Params: Tracked,None)",
+            "value": 6262.164052327474,
+            "unit": "ns",
+            "range": "± 55.43536669655536"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.Eval(Params: Tracked,None)",
+            "value": 44373.681131998695,
+            "unit": "ns",
+            "range": "± 133.2061554292331"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.EvalSha(Params: Tracked,None)",
+            "value": 15030.396161760602,
+            "unit": "ns",
+            "range": "± 100.25334912250774"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.SmallScript(Params: Tracked,None)",
+            "value": 39402.9296875,
+            "unit": "ns",
+            "range": "± 191.20794226328985"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.LargeScript(Params: Tracked,None)",
+            "value": 2604596.2890625,
+            "unit": "ns",
+            "range": "± 16789.35945805381"
+          },
+          {
+            "name": "BDN.benchmark.Operations.ScriptOperations.ArrayReturn(Params: Tracked,None)",
+            "value": 87121.8740609976,
+            "unit": "ns",
+            "range": "± 409.29157701276614"
           }
         ]
       }
