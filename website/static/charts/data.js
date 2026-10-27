@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793125412164,
+  "lastUpdate": 1793125429827,
   "repoUrl": "https://github.com/microsoft/garnet",
   "entries": {
     "Benchmark": [],
@@ -768461,366 +768461,6 @@ window.BENCHMARK_DATA = {
             "username": "web-flow"
           },
           "distinct": true,
-          "id": "b94939630e792cc279b0965de1f18d6ef6108622",
-          "message": "Fix CompletionEvent disposal and reset bugs, and coalesce LogSizeTracker signals (#2198)\n\n* Fix CompletionEvent disposal, reset and per-record signalling\n\nCompletionEvent signals by allocating a fresh SemaphoreSlim, swapping it in, releasing the retired one, and abandoning it. That design is kept -- it delegates sync waits, async waits, cancellation and timeouts to SemaphoreSlim -- but it had several bugs around its edges, and one of its callers signalled far more often than it needed to.\n\nLogSizeTracker signalled on every object-bearing record while over budget, which is the steady state for a memory-capped instance: InternalUpsert, InternalRMW and InternalDelete all call IncrementSize on the insert path. A resizePending flag now coalesces that, so an over-budget record update costs one read of a line written only on the signal edge and on resizer wakeups. Measured at 16 threads, that path goes from 5.8M to 3052M updates/s.\n\nResizerTask must capture the event generation, then clear the flag, then sample sizes. Clearing before capturing loses wakeups: a signaller in that window has its signal consumed by the capture rather than the wait, while the flag stays latched, parking the resizer for the full ResizeTaskDelaySeconds with work outstanding and stalling the allocation retry loop NeedToWaitForClose drives through Signal().\n\nDispose() disposed the semaphore and nulled the field. SemaphoreSlim.Dispose() does not pulse, so threads parked in the infinite waits -- ShiftBeginAddress, TsavoriteLog.AllocateBlock, the ALLOCATE_FAILED retry -- were never woken; a capture taken beforehand threw ObjectDisposedException from inside an RMW with its epoch suspended; and a wait on the live field threw NullReferenceException. It now releases the live generation and CAS-installs a permanently signaled tombstone, so every waiter present and future falls through and its own retry loop can observe the owner's shutdown state. Set() refuses to replace the tombstone, which would otherwise un-signal a disposed event and double-release it.\n\nBecause disposal now wakes waiters, the retry loops need terminal checks or they would spin where they used to hang: AllocatorBase gains IsDisposed/ThrowIfDisposed, and the checks are added to WaitToRetryNow, ShiftBeginAddress, HandleOperationStatus's ALLOCATE_FAILED case, both AllocateBlock overloads, AllocateBlockPartial, and the ten async enqueue loops, where an already-completed await does not yield and would spin at full CPU. ShiftBeginAddress returns rather than falling through, because its head shift is uncapped and the OnPagesClosed that follows would free pages concurrently with the teardown Dispose is already performing. AllocatorBase.Dispose now releases flushEvent waiters before tearing down the epoch and buffer pool they would otherwise touch on the way out.\n\nAllocatorBase.ResetCore called flushEvent.Initialize(), which overwrites the field without releasing the outgoing semaphore, so anyone parked on it was stranded -- every later Set() signals the new instance. It now calls Set().\n\nGarnet.client had its own copy of the type whose Set() did dispose the retired semaphore, giving GarnetClient a reachable ObjectDisposedException in the window between capturing the event and awaiting it. The duplicate is deleted in favour of the shared type via InternalsVisibleTo.\n\n* Add a sustained-pressure test for LogSizeTracker signal coalescing\n\nThe existing coverage exercised the over-budget allocation path only with the resizer stopped. The case the coalescing exists for is the opposite one: the resizer running but unable to keep up, so the heap stays over budget while inserters keep arriving. Two paths then ask for a signal on every attempt -- every object-bearing record update via IncrementSize, and every page-turn retry via NeedToWaitForClose -> Signal, the latter spinning for as long as a thread is blocked waiting for eviction.\n\nEight threads upserting 200,000 records with 4KB heap objects into a 64KB budget holds the store over budget for ~95% of sampled intervals and finishes in about 1.2s. In that state roughly 245,000 signal attempts collapse to about 1,900 actual signals, a ~125x suppression worth roughly 21MB of gen-0 garbage. Wall time is unchanged, so this is a GC-pressure and contention result rather than a throughput one.\n\nThe test asserts the premise it depends on (pressure really was sustained), that every inserter completes (the allocation path makes progress rather than livelocking), and that signals stay well under one per ten records. Removing the coalescing guard takes that last figure to ~236,000 and fails the assertion, so it is a regression test rather than a tautology.\n\nLogSizeTracker gains an internal ResizerSignalCount for this, incremented only on the path that genuinely signals, so the coalesced path is unaffected.\n\n* Wake flushEvent waiters before any allocator state is reclaimed\n\nReleasing flushEvent makes parked waiters runnable, and a waiter's epoch.Resume() calls Acquire(), which drains pending epoch actions when drainCount > 0. Those actions include the page-close callbacks that dereference allocator state, so where the release happens decides what that drain can touch.\n\nReleasing it in AllocatorBase.Dispose() was too late for the object allocator: ObjectAllocatorImpl.Dispose() clears objectPages and the page values before calling base.Dispose(), and a page-close callback drained against a null objectPages is escalated to FailFast by OnPagesClosedWorker. Move the release into StopSizeTrackerForDispose(), which both Dispose() overrides call before reclaiming anything, so waiters are woken while that state is still intact. It goes before Stop(wait: true) as well, so a resizer parked on flushEvent cannot keep that wait spinning.\n\nThis narrows the window rather than closing it, and the XML doc now says so: a thread can still begin a fresh allocation at any point during teardown and drain a callback on its way in. Disposing an allocator with operations in flight is unsafe by contract and has to be prevented by the owner, which is why the resizer -- the one actor this class owns -- is stopped and waited for here.\n\nShiftBeginAddress had a second route past the disposal check: the flush-completed break skipped it and went on to the uncapped head shift. The check now sits after the wait loop so it covers every exit, including the noFlush path.\n\nThe sustained-pressure test leaked its sampler thread when an inserter timed out: the assertion threw before stopSampling was set, so the sampler kept reading tracker while TearDown cleared it, replacing the intended timeout failure with a NullReferenceException. Stop and join it in a finally, and make it a background thread so it can never hold up the test host.\n\n---------\n\nCo-authored-by: Ted Hart <tedhar@users.noreply.github.com>",
-          "timestamp": "2026-10-02T11:52:48-07:00",
-          "tree_id": "89604fe8313d4ad4bf1ed1e91170e6aca3ae44f3",
-          "url": "https://github.com/microsoft/garnet/commit/b94939630e792cc279b0965de1f18d6ef6108622"
-        },
-        "date": 1790982428213,
-        "tool": "benchmarkdotnet",
-        "benches": [
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetCommand(Params: AAD)",
-            "value": 38726.722791399276,
-            "unit": "ns",
-            "range": "± 138.54646551084792"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonSetCommand(Params: AAD)",
-            "value": 46688.27200633082,
-            "unit": "ns",
-            "range": "± 764.3485200285766"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetDeepPath(Params: AAD)",
-            "value": 52659.14461771647,
-            "unit": "ns",
-            "range": "± 432.03527408108425"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayPath(Params: AAD)",
-            "value": 132386.04189828725,
-            "unit": "ns",
-            "range": "± 583.2646814861079"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayElementsPath(Params: AAD)",
-            "value": 2419.34538091932,
-            "unit": "ns",
-            "range": "± 62.74275494402247"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetFilterPath(Params: AAD)",
-            "value": 144209.53048706055,
-            "unit": "ns",
-            "range": "± 3085.0468249907412"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetRecursive(Params: AAD)",
-            "value": 2879758.7653459823,
-            "unit": "ns",
-            "range": "± 9976.868722610745"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetCommand(Params: AAD)",
-            "value": 54515.41951497396,
-            "unit": "ns",
-            "range": "± 432.732651063729"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonSetCommand(Params: AAD)",
-            "value": 55657.7487411499,
-            "unit": "ns",
-            "range": "± 1090.267710895291"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetDeepPath(Params: AAD)",
-            "value": 72539.74815150669,
-            "unit": "ns",
-            "range": "± 1126.6228830234222"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayPath(Params: AAD)",
-            "value": 405618.2637939453,
-            "unit": "ns",
-            "range": "± 948.7771887310826"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayElementsPath(Params: AAD)",
-            "value": 8117.9615478515625,
-            "unit": "ns",
-            "range": "± 204.38794639738651"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetFilterPath(Params: AAD)",
-            "value": 420237.66141601565,
-            "unit": "ns",
-            "range": "± 11130.672818267638"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetRecursive(Params: AAD)",
-            "value": 2691795.6864483175,
-            "unit": "ns",
-            "range": "± 8051.411116248682"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetCommand(Params: ACL)",
-            "value": 38732.97215779623,
-            "unit": "ns",
-            "range": "± 72.77021793653972"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonSetCommand(Params: ACL)",
-            "value": 47371.47740478515,
-            "unit": "ns",
-            "range": "± 220.47539617273338"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetDeepPath(Params: ACL)",
-            "value": 53393.47513326009,
-            "unit": "ns",
-            "range": "± 536.3366514532655"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayPath(Params: ACL)",
-            "value": 133854.6691080729,
-            "unit": "ns",
-            "range": "± 3278.400317581575"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayElementsPath(Params: ACL)",
-            "value": 2374.175558635167,
-            "unit": "ns",
-            "range": "± 6.128873170296046"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetFilterPath(Params: ACL)",
-            "value": 142196.28849283853,
-            "unit": "ns",
-            "range": "± 1212.646433210077"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetRecursive(Params: ACL)",
-            "value": 2906224.310546875,
-            "unit": "ns",
-            "range": "± 5603.852411807033"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetCommand(Params: ACL)",
-            "value": 55921.8893254598,
-            "unit": "ns",
-            "range": "± 1437.0153854066994"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonSetCommand(Params: ACL)",
-            "value": 55380.05861253005,
-            "unit": "ns",
-            "range": "± 192.64455628818473"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetDeepPath(Params: ACL)",
-            "value": 70973.16870117188,
-            "unit": "ns",
-            "range": "± 490.8069230267071"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayPath(Params: ACL)",
-            "value": 407125.37732872594,
-            "unit": "ns",
-            "range": "± 1691.1760378482575"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayElementsPath(Params: ACL)",
-            "value": 7900.423317218649,
-            "unit": "ns",
-            "range": "± 108.46979790984382"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetFilterPath(Params: ACL)",
-            "value": 411262.0001395089,
-            "unit": "ns",
-            "range": "± 1467.8632126220723"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetRecursive(Params: ACL)",
-            "value": 2648370.3251953125,
-            "unit": "ns",
-            "range": "± 5938.492005295968"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetCommand(Params: AOF)",
-            "value": 38311.01534799429,
-            "unit": "ns",
-            "range": "± 109.2560183535403"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonSetCommand(Params: AOF)",
-            "value": 54663.12947591146,
-            "unit": "ns",
-            "range": "± 817.2578112577758"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetDeepPath(Params: AOF)",
-            "value": 53041.35827636719,
-            "unit": "ns",
-            "range": "± 113.62236334917934"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayPath(Params: AOF)",
-            "value": 135601.62458007812,
-            "unit": "ns",
-            "range": "± 3547.137795582542"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayElementsPath(Params: AOF)",
-            "value": 2380.1683464050293,
-            "unit": "ns",
-            "range": "± 11.007136206006486"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetFilterPath(Params: AOF)",
-            "value": 143848.23647836538,
-            "unit": "ns",
-            "range": "± 173.63896313316985"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetRecursive(Params: AOF)",
-            "value": 2906233.0625849185,
-            "unit": "ns",
-            "range": "± 95676.6058095076"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetCommand(Params: AOF)",
-            "value": 54764.30106608073,
-            "unit": "ns",
-            "range": "± 564.5409128419734"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonSetCommand(Params: AOF)",
-            "value": 61891.56396484375,
-            "unit": "ns",
-            "range": "± 851.4292920569069"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetDeepPath(Params: AOF)",
-            "value": 73093.66369628906,
-            "unit": "ns",
-            "range": "± 383.5535211690399"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayPath(Params: AOF)",
-            "value": 404998.1979792668,
-            "unit": "ns",
-            "range": "± 1807.6401418688254"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayElementsPath(Params: AOF)",
-            "value": 7990.811432667268,
-            "unit": "ns",
-            "range": "± 212.34438310465083"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetFilterPath(Params: AOF)",
-            "value": 420022.89349365234,
-            "unit": "ns",
-            "range": "± 1721.1485045752445"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetRecursive(Params: AOF)",
-            "value": 2602602.986328125,
-            "unit": "ns",
-            "range": "± 6497.36784174529"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetCommand(Params: None)",
-            "value": 38673.320458045375,
-            "unit": "ns",
-            "range": "± 32.75346172013043"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonSetCommand(Params: None)",
-            "value": 47639.86039381761,
-            "unit": "ns",
-            "range": "± 708.9954105873617"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetDeepPath(Params: None)",
-            "value": 56459.106541224886,
-            "unit": "ns",
-            "range": "± 887.2046299701802"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayPath(Params: None)",
-            "value": 131601.85624556107,
-            "unit": "ns",
-            "range": "± 964.9756006098511"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayElementsPath(Params: None)",
-            "value": 2378.7795389960793,
-            "unit": "ns",
-            "range": "± 47.67959870927547"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetFilterPath(Params: None)",
-            "value": 139657.85664876303,
-            "unit": "ns",
-            "range": "± 724.1291845167976"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetRecursive(Params: None)",
-            "value": 2930642.7455729167,
-            "unit": "ns",
-            "range": "± 44533.740552835276"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetCommand(Params: None)",
-            "value": 59008.38917105539,
-            "unit": "ns",
-            "range": "± 1643.9081880318952"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonSetCommand(Params: None)",
-            "value": 54499.76490275065,
-            "unit": "ns",
-            "range": "± 841.9386274743313"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetDeepPath(Params: None)",
-            "value": 70536.56912392064,
-            "unit": "ns",
-            "range": "± 632.1138053560447"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayPath(Params: None)",
-            "value": 404562.1594543457,
-            "unit": "ns",
-            "range": "± 3172.4703522344234"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayElementsPath(Params: None)",
-            "value": 7903.425427246094,
-            "unit": "ns",
-            "range": "± 18.11160164150023"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetFilterPath(Params: None)",
-            "value": 411334.14881310094,
-            "unit": "ns",
-            "range": "± 1209.2388275852766"
-          },
-          {
-            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetRecursive(Params: None)",
-            "value": 2683447.0866608797,
-            "unit": "ns",
-            "range": "± 65219.96660678324"
-          }
-        ]
-      },
-      {
-        "commit": {
-          "author": {
-            "email": "15467143+TedHartMS@users.noreply.github.com",
-            "name": "Ted Hart",
-            "username": "TedHartMS"
-          },
-          "committer": {
-            "email": "noreply@github.com",
-            "name": "GitHub",
-            "username": "web-flow"
-          },
-          "distinct": true,
           "id": "fc97f951e82e6479bd61bddaa6e9de7f48b79647",
           "message": "Allocate test ports dynamically from a non-ephemeral range (#2193)\n\n* Refuse a second bind on an occupied port on Windows, and add an avalanched hash\n\nOn Windows GarnetServerTcp set SO_REUSEADDR unconditionally, and cleared\nSO_REUSEPORT only on Linux, macOS, and FreeBSD. Windows SO_REUSEADDR is\npermissive: it lets a socket bind an address and port another socket already\nholds. Two live servers therefore both bound the same port and the OS split\nincoming connections between them, so a port conflict surfaced as plausible but\nwrong results rather than as a bind failure. Windows now sets\nSO_EXCLUSIVEADDRUSE, which refuses the second bind; the Unix paths are\nunchanged. GarnetServerTcpTests covered this but was skipped on Windows because\nthe behavior it asserts did not hold there. It now runs on every platform, and\nits TIME_WAIT rebind case confirms exclusive use does not block restarts.\n\nUtility.GetHashCodeWithMix applies a MurmurHash3 fmix64 finalizer to HashBytes.\nHashBytes is a multiply-accumulate, and multiplication propagates information\nonly toward higher bits, so its low bits carry almost no entropy: flipping one\ninput bit changes some output bits with probability 1.000 rather than 0.5. The\nfinalizer's right shifts move entropy back down, which makes it safe to reduce\nthe result modulo a power of two. UtilityTests asserts the avalanche property\ndirectly, since that, rather than the hash value, is why the method exists.\n\n* Allocate test ports dynamically from a non-ephemeral range\n\nTest ports were fixed per sub-project from a base of 33278, shifted by an\noptional GARNET_TEST_PORT_SLOT offset. That base predates the slot mechanism and\nsits inside Linux's default outbound-connection range (32768-60999,\nnet.ipv4.ip_local_port_range), so on Linux the kernel could assign a test's port\nto a connect() between the moment the port was observed free and the moment the\nserver bound it. Probing cannot close that window; only staying out of the range\ncan. The slot mechanism encoded 49152 as the ephemeral floor, which is the\nWindows and macOS value, so slot 7 looked like the boundary case while slot 0 was\nalready unsafe on Linux. Windows and macOS were never affected, which is why the\nflakes were Linux-only.\n\nPorts now come from [16384, 32768), below every supported platform's ephemeral\nrange and above the crowded region that holds both ports a developer is likely to\nbe running (6379, 5432, 11211, 8080) and ports this suite itself uses\n(10000-10002 Azurite). Each test host leases one aligned 32-port block, held by\nan exclusively locked file for the life of the process, which is what keeps\nconcurrent hosts apart; the OS releases the lock on exit, crash, or kill, so a\nblock frees itself. The lease is taken first and the ports probed second, because\nsoftware outside the suite, or a server stranded by a killed run, holds ports\nwhile holding no lease.\n\nBlocks are searched from a start derived from the checkout and the project name,\nso a project returns to the same ports run after run and netstat output stays\ninterpretable. On collision the search advances by a stride derived from the\nprocess, so two hosts that start at the same block diverge rather than walking in\nlockstep. The stride is forced odd and the block count is a power of two, which\ntogether make the walk visit every block exactly once: completing it proves no\nblock is free rather than exhausting a retry budget. The hash is\nUtility.GetHashCodeWithMix, because the index is cut from the low bits that\nHashBytes alone leaves unmixed.\n\nThis replaces slots entirely. Concurrency is no longer capped at seven\ncheckouts, GARNET_TEST_PORT_SLOT is gone and nothing needs setting, and\nTestPortAssignment, ClusterPortAssignment, and the band-width invariants they\nrequired are deleted - projects are identified by assembly name, so adding one\nneeds no central registration.\n\nSpecial cases, each commented where it lives:\n- Ports 30000-30999 are carved out for test/docker-tests/validate_docker_images.py,\n  which allocates from its own fixed base and can run alongside this suite.\n  TestPortAllocatorTests reads that base out of the Python file so moving either\n  side without the other fails as a test.\n- The probe binds the IPv4 and IPv6 wildcards separately and exclusively. One\n  dual-mode socket handles IPv4-mapped addresses differently per platform, and a\n  shared bind succeeds alongside a listener on a specific address under that\n  wildcard.\n- A failed probe deliberately ignores the socket error code: Windows reports\n  AccessDenied for ports excluded by Hyper-V, WSL, or Docker, not\n  AddressAlreadyInUse.\n- Cluster nodes keep contiguous ports because node n binds base + n; block\n  alignment keeps that run from straddling a boundary.\n- GARNET_TEST_PORT_BASE pins a base port for reproduction or a fixed firewall\n  opening. Pinned ports are still leased and probed.\n\nGarnetServerTcp.Start now reports the endpoint and the operating system's reason\nwhen a bind fails, which the raw SocketException names neither of.\nTestUtils.OnTearDown adds the allocation context, so a conflict reads as software\noutside the suite rather than as a defect in Garnet or in the test.\n\n* Drop stale port-slot instructions from the add-garnet-command skill\n\nThe skill still told readers to set GARNET_TEST_PORT_SLOT, which no longer\nexists; test hosts now claim their ports without configuration.\n\n* Cover the port allocator's failure paths\n\nReserve's error paths decide whether a run stops clearly or proceeds on ports it\ndoes not own, and none of them ran in an ordinary suite: a block another host\nholds, a pinned base port, and every block exhausted. A regression in any of\nthem would surface as the silent cross-checkout corruption the allocator exists\nto prevent.\n\nLeases in these tests are redirected to a private directory. Holding blocks in\nthe shared one would stop concurrent runs in other checkouts from starting,\nwhich is the very failure under test.\n\nWriting them found a real defect in the first draft: two tests took the same\nport from a deterministic helper, and because a reservation holds its lease for\nthe life of the process while binding nothing, the second saw ports that read as\nfree inside a block that was already leased. The helper now checks both, which\nis the same distinction the allocator draws.\n\nBuildPortConflictReport is split out of ReportPortConflictIfBindFailed so the\ndecision and the wording can be asserted without making a real test fail.\n\n* Name the alternate port explicitly in ConnectionLimitAcrossListenersTests\n\nThe fixture built its second listener from TestUtils.TestPort + 1. That is the\nport TestUtils.AlternateTestPort returns, and it is inside the block this test\nhost leases, so the behavior is unchanged - but the arithmetic only works\nbecause the reservation covers two ports, which the expression does not say.\nNaming the property states the dependency the fixture actually has.\n\n* Fix overlapping pinned reservations and misleading bind diagnostics\n\nReview of the allocator found four defects, all in paths that only run when\nsomething has already gone wrong.\n\nReservePinned leased only the block containing its first port. A pinned base is\ndeliberately not block-aligned, so a run can cross into the next block: base\n16415 with two ports leases block 0 while port 16416 sits unleased in block 1.\nAnother host could lease that block and be handed an overlapping run, both\nprobes passing because neither side had bound yet. Every intersected block is\nnow leased. IntersectedBlocks also skips ports outside the allocatable range,\nwhere PortBlock is not meaningful - it returned -480 for port 1024 and 738 for\nport 40000, neither of which names a block.\n\nThe teardown report fired for every bind failure but always diagnosed a port\nconflict. GarnetServerTcp also emits \"Could not bind\" for AccessDenied, which is\na platform-reserved range, and AddressNotAvailable, which is an address absent\nfrom the machine; neither is another process taking the port. The report now\nparses the socket error and stays silent unless it is AddressAlreadyInUse.\n\nThe report read the standalone port field, which ClusterTestContext.ReservePorts\nnever sets, so every cluster bind failure claimed the host had reserved no ports\nwhile it held an eight-port run. The allocator now records each reservation and\nthe report looks up the run covering the failing port, which also lets it name\nthe project that holds it.\n\nThe report asserted that a reserved port cannot have been taken by the OS. That\nis true only inside the allocatable range. GARNET_TEST_PORT_BASE can pin a run\nabove it, where the kernel really can assign the port to an outbound connection\nbetween the probe and the bind - the one collision pinning opts into. Pinned\nruns outside the range are now described as exactly that, and an endpoint the\ntest built itself is reported as carrying no allocator guarantee at all.\n\nEach fix is covered by a test verified by reverting the fix: restoring the\nsingle-block lease reports the tail of a straddling run as still available, and\nremoving the error-code gate reports an AccessDenied failure as software outside\nthe suite.",
           "timestamp": "2026-10-02T19:54:35-07:00",
@@ -778549,6 +778189,198 @@ window.BENCHMARK_DATA = {
             "value": 2695208.4553865134,
             "unit": "ns",
             "range": "± 59221.754588275886"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "96085550+vazois@users.noreply.github.com",
+            "name": "Vasileios Zois",
+            "username": "vazois"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9908e6c22bf758bbb289b078913a4c2a31f9a55c",
+          "message": "[Tsavorite] Validate migration and replication record layouts (#2267)\n\n* validate diskLogRecord payload bytes before allocations during serialization\n\n* Align overflow validation tests and documentation with component cleanup\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>\n\nCopilot-Session: 7e447cb0-c63c-4c78-bd34-bb7aac272245\n\n* validate upfront overflow bytes\n\n---------\n\nCopilot-Session: 7e447cb0-c63c-4c78-bd34-bb7aac272245",
+          "timestamp": "2026-10-27T11:10:34-07:00",
+          "tree_id": "7dd687556c839b0a97ab1357fea11af01f4524bb",
+          "url": "https://github.com/microsoft/garnet/commit/9908e6c22bf758bbb289b078913a4c2a31f9a55c"
+        },
+        "date": 1793125411816,
+        "tool": "benchmarkdotnet",
+        "benches": [
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetCommand(Params: AAD)",
+            "value": 67732.98114013672,
+            "unit": "ns",
+            "range": "± 166.20930017478108"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonSetCommand(Params: AAD)",
+            "value": 85051.47857666016,
+            "unit": "ns",
+            "range": "± 412.9980301951198"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetDeepPath(Params: AAD)",
+            "value": 98364.12663574218,
+            "unit": "ns",
+            "range": "± 732.013621142937"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayPath(Params: AAD)",
+            "value": 216301.8228102464,
+            "unit": "ns",
+            "range": "± 356.9297796934894"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayElementsPath(Params: AAD)",
+            "value": 3566.8879268352803,
+            "unit": "ns",
+            "range": "± 5.471976632019943"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetFilterPath(Params: AAD)",
+            "value": 215245.54152134486,
+            "unit": "ns",
+            "range": "± 730.9673981614781"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetRecursive(Params: AAD)",
+            "value": 4435551.947544643,
+            "unit": "ns",
+            "range": "± 22652.249628125483"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetCommand(Params: ACL)",
+            "value": 70397.7532043457,
+            "unit": "ns",
+            "range": "± 73.8382358007498"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonSetCommand(Params: ACL)",
+            "value": 88490.68927873884,
+            "unit": "ns",
+            "range": "± 349.0965828567314"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetDeepPath(Params: ACL)",
+            "value": 95384.86797223773,
+            "unit": "ns",
+            "range": "± 257.9898694760958"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayPath(Params: ACL)",
+            "value": 205189.48334209734,
+            "unit": "ns",
+            "range": "± 272.7606198458841"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayElementsPath(Params: ACL)",
+            "value": 3520.983466466268,
+            "unit": "ns",
+            "range": "± 11.92178201647719"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetFilterPath(Params: ACL)",
+            "value": 219236.96767014725,
+            "unit": "ns",
+            "range": "± 490.5667112134884"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetRecursive(Params: ACL)",
+            "value": 4400611.962611607,
+            "unit": "ns",
+            "range": "± 14210.821566317809"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetCommand(Params: AOF)",
+            "value": 68081.552961077,
+            "unit": "ns",
+            "range": "± 323.18787451586377"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonSetCommand(Params: AOF)",
+            "value": 96812.0449305943,
+            "unit": "ns",
+            "range": "± 239.3061858498467"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetDeepPath(Params: AOF)",
+            "value": 93124.18127441406,
+            "unit": "ns",
+            "range": "± 248.19075063994126"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayPath(Params: AOF)",
+            "value": 202463.12823016828,
+            "unit": "ns",
+            "range": "± 822.216325424975"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayElementsPath(Params: AOF)",
+            "value": 3515.3230098088584,
+            "unit": "ns",
+            "range": "± 10.386713091382534"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetFilterPath(Params: AOF)",
+            "value": 215591.35670689173,
+            "unit": "ns",
+            "range": "± 373.72413606801877"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetRecursive(Params: AOF)",
+            "value": 4405984.311979166,
+            "unit": "ns",
+            "range": "± 12493.913742936786"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetCommand(Params: None)",
+            "value": 72423.48210652669,
+            "unit": "ns",
+            "range": "± 70.1733081594763"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonSetCommand(Params: None)",
+            "value": 87151.60591008113,
+            "unit": "ns",
+            "range": "± 422.98941735326315"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetDeepPath(Params: None)",
+            "value": 100751.9654296875,
+            "unit": "ns",
+            "range": "± 589.359206508612"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayPath(Params: None)",
+            "value": 208436.6549541767,
+            "unit": "ns",
+            "range": "± 193.65091182234823"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetArrayElementsPath(Params: None)",
+            "value": 3555.0991611480713,
+            "unit": "ns",
+            "range": "± 8.604640757848541"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetFilterPath(Params: None)",
+            "value": 214972.93759390025,
+            "unit": "ns",
+            "range": "± 249.8330861180932"
+          },
+          {
+            "name": "BDN.benchmark.Operations.JsonOperations.ModuleJsonGetRecursive(Params: None)",
+            "value": 4568970.250901442,
+            "unit": "ns",
+            "range": "± 20078.72570933811"
           }
         ]
       }
